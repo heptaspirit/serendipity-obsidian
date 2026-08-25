@@ -1,0 +1,20 @@
+# 本地二进制/引擎（测试用，绝不入库）
+seren.exe
+seren
+*.exe
+
+# 构建产物（Obsidian 插件发布时由 CI/release 上传 main.js）
+main.js
+styles.css
+node_modules/
+
+# 本地数据/配置
+*.log
+.vault-test/
+docs-local/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,9 @@
+{
+  "id": "serendipity-engine",
+  "name": "Serendipity Engine",
+  "version": "0.1.13",
+  "minAppVersion": "1.5.0",
+  "description": "图谱漫游：给笔记双链装上激活引擎——你问一个点，它给你一片。白盒、本地、纯 Go 零依赖（面板嵌入引擎 Web UI 的薄壳插件）。",
+  "author": "heptaspirit",
+  "isDesktopOnly": true
+}
