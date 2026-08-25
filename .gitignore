@@ -5,13 +5,20 @@ seren
 
 # 构建产物（Obsidian 插件发布时由 CI/release 上传 main.js）
 main.js
-styles.css
 node_modules/
+.npm-cache/
 
 # 本地数据/配置
 *.log
 .vault-test/
+.vault-test2/
 docs-local/
+.gocache/
+.gomod-cache/
+
+# 工具缓存/输出（graphflow 等）
+.graphflow-cache/
+graphflow-out/
 
 # OS / editor
 .DS_Store

@@ -1,0 +1,26 @@
+{
+  "name": "serendipity-obsidian",
+  "version": "0.1.13",
+  "description": "Serendipity Engine · Obsidian thin-shell plugin (iframe the engine's self-served Web UI)",
+  "main": "main.js",
+  "scripts": {
+    "dev": "rollup -c --watch",
+    "build": "rollup -c"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "graph",
+    "roam",
+    "serendipity-engine"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/node": "^20.11.0",
+    "obsidian": "latest",
+    "rollup": "^4.62.5",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.0"
+  }
+}
