@@ -21,6 +21,7 @@ import type {
   SerenCommunities,
   SerenSuggestLinks,
   SerenHot,
+  SerenTouchDigestResp,
 } from "./seren-api";
 
 export interface SerenConnection {
@@ -90,7 +91,7 @@ export class SerenApi {
     }
   }
 
-  /** 读取库规模 + 版本（D6 版本契约比对用）。 */
+  /** 读取库规模 + 版本（引擎版本校验用：必须 ≥ REQUIRED_ENGINE）。 */
   stats(): Promise<SerenStats> {
     return this.get<SerenStats>("/api/stats");
   }
@@ -150,5 +151,15 @@ export class SerenApi {
 
   suggestLinks(k = 50): Promise<SerenSuggestLinks> {
     return this.get<SerenSuggestLinks>(`/api/suggest-links?k=${k}`);
+  }
+
+  /** 最新 touch digest 只读查询（v0.1.14，§3.7）。被动：仅查询返回，不推送。 */
+  touchDigest(): Promise<SerenTouchDigestResp> {
+    return this.get<SerenTouchDigestResp>("/api/touch/digest");
+  }
+
+  /** 标记 digest 已读（v0.1.14）。只写 touch store meta，不碰 touch 事件、不反馈排序。 */
+  async touchDigestAck(id: string): Promise<void> {
+    await this.post("/api/touch/digest/ack", { id });
   }
 }

@@ -65,6 +65,15 @@ const DICT: Dict = {
   similar: { zh: "相似", en: "Similar" },
   similarTitle: { zh: "🔗 相似节点", en: "🔗 Similar nodes" },
   similarEmpty: { zh: "没有相似节点", en: "No similar nodes" },
+  digestTitle: { zh: "📋 行为信号 digest", en: "📋 Behavior digest" },
+  digestSince: { zh: "窗口起点", en: "Window since" },
+  digestTotal: { zh: "新增 touch", en: "New touches" },
+  digestTargets: { zh: "被反复点击", en: "Top clicked" },
+  digestSources: { zh: "来源词", en: "Source queries" },
+  digestEmpty: { zh: "暂无 digest", en: "No digest yet" },
+  digestExport: { zh: "导出为笔记", en: "Export as note" },
+  mcpStatusReady: { zh: "🔌 MCP 就绪 · 点击复制", en: "🔌 MCP ready · click to copy" },
+  copyMcpConfig: { zh: "一键复制 MCP 配置", en: "Copy MCP config" },
 };
 
 const LANG = (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";

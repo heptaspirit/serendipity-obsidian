@@ -46,7 +46,7 @@ npm run dev           # rollup -c --watch
 
 | 路径 | 职责 |
 |---|---|
-| `manifest.json` | 插件元数据（id/name/author/version/minAppVersion/description/isDesktopOnly，**均必填**）。`id=serendipity-engine`；`version` 必须与引擎版本契约一致（D6） |
+| `manifest.json` | 插件元数据（id/name/author/version/minAppVersion/description/isDesktopOnly，**均必填**）。`id=serendipity-engine`；`version` 是**插件自身版本**（独立于引擎，当前 `0.1.0`）。引擎兼容性下限由 `main.ts` 的 `REQUIRED_ENGINE` 声明 |
 | `src/main.ts` | 插件入口：onload/onunload、生命周期状态、managed spawn、探测+等待健康、版本比对、命令、状态栏、隐式 touch |
 | `src/view.ts` | ItemView 面板（**原生界面**）：查询漫游/随机漫步/结果卡片（点击跳回笔记、↺ 继续漫游）+ 三态（未找到/未启动/运行中）。原生 Obsidian DOM → 主题自动跟随、可响应窄宽。高级功能经命令「打开引擎完整界面」进引擎 Web UI |
 | `src/settings.ts` | 设置页：模式(managed/external)、端口、核心路径、token 重生成、自启、隐式 touch |
@@ -54,7 +54,8 @@ npm run dev           # rollup -c --watch
 | `src/seren-api.d.ts` | **API 契约类型副本**（D5，唯一共享物）。改 API 必须同步引擎 `docs/api-contract.md` |
 | `rollup.config.mjs` | 构建（输入 src/main.ts → 单文件 main.js，`module.exports = 插件类`） |
 | `styles.css` | 插件样式（iframe 容器 / 占位 / 状态栏）。随仓库与发布携带 |
-| `README.md` | 用户侧说明（requires / 安装 / 构建 / 发布） |
+| `README.md` / `README.en.md` | 用户侧说明（中英分离，格式对齐主引擎：语法 pill + 徽章 + 分节）：requires / 安装 / 构建 / 发布 / MCP |
+| `LICENSE` | MIT License |
 
 ## 文档地图（改什么，先读什么）
 
@@ -79,6 +80,8 @@ Obsidian(M0) ──spawn──▶ seren serve <vault> --port <p> --vault-name <n
 - **spawn 契约**：`seren serve <vault> --port <p> --vault-name <vault名> --token <插件token>`（token 由插件生成并持久化，`--token` 指定以保证插件自身调 API 无感）
 - **面板 = 原生界面**（非 iframe）：插件直接消费引擎 REST，用 Obsidian DOM 渲染 —— 主题自动跟随、可响应窄宽。核心覆盖：查询漫游 / 随机漫步 / 结果卡片（点击跳回笔记、↺ 继续漫游）；三态（未找到 / 未启动 / 运行中）。
 - **高级功能**：关系 / 相似 / 社区 / 导出 / 参数调优仍在引擎 Web UI；命令「打开引擎完整界面」用 `shell.openExternal` 在系统浏览器打开 `http://127.0.0.1:<port>/`（引擎注入 token，免手填）。
+- **行为信号 digest（v0.1.14 引擎 §3.7）**：状态栏被动提醒（`stats.digest_available` 轮询 30s，非弹窗）→ digest Modal（读 `/api/touch/digest`）→「导出为笔记」写 `serendipity-digest-*.md` 入 vault（**引擎零写 vault，导出是插件职责**）+ ack（`/api/touch/digest/ack` 清提醒）。
+- **MCP 配置（AI 接入）**：`mcpConfigJson()` 生成 `mcpServers.seren`（`seren mcp <vault>`，不传 `--db`——避免复刻引擎 store 的 sha256 路径）供一键复制；设置页 + 主界面状态条显示就绪状态。MCP 是 `seren mcp` 独立 stdio 入口（只读工具），非 `serve` 一部分——只能展示配置供复制，不能开关。
 - **跳回**：点结果卡片 → `workspace.openLinkText(uri 解码 file ?? id)` 就地跳回（原生，无 postMessage 桥）。
 
 ## 生命周期与进程管理（M2 §六）
@@ -95,7 +98,7 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 
 1. **UI 边界**：面板是**原生轻界面**（核心漫游/跳回），直接消费引擎 REST；**不复制引擎完整 Web UI 的算法与富功能**（关系/相似/社区/导出仍在引擎 Web UI，经命令打开）。引擎零代码改动。
 2. **不打包引擎**（D4）：插件发布不含 seren 二进制；README 写 `requires serendipity-engine ≥ vX.Y`。
-3. **契约同步**（D5/D6）：改任何 `/api/*` → 必须同步引擎 `docs/api-contract.md` + 本仓库 `src/seren-api.d.ts`。manifest.version 与引擎版本要匹配，连接时鉴权版本比对。
+3. **契约同步**（D5/D6）：改任何 `/api/*` → 必须同步引擎 `docs/api-contract.md` + 本仓库 `src/seren-api.d.ts`。插件版本号独立（`manifest.version`）；引擎版本作为兼容性下限，由 `main.ts` 的 `REQUIRED_ENGINE` 声明，连接时比对（≥ 才通过）。
 4. **安全红线**：引擎只读本地凭据类数据绝不读取；本插件只连 `127.0.0.1`；数据不出本机；二次确认弹窗（隐私披露）在启用前必展示。
 5. **克制设计**：touch 埋点只记录不演化（绝不反馈排序/hot）；监听节流合并；不加中间态恢复逻辑。
 6. **启动非阻塞**：`onload` 绝不 `await` 引擎发现/启停（会阻塞 Obsidian 启动），一律 `onLayoutReady` 后台执行、结束再 `updateViews`。

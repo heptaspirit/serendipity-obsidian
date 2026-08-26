@@ -1,67 +1,77 @@
-# Serendipity Engine · Obsidian Plugin
+# Serendipity Engine · Obsidian 插件
 
-> **中文** —— 给 Obsidian 装「奇遇记引擎」的插件：把引擎（seren）的**图谱漫游**能力带进 Obsidian。面板用原生 Obsidian 界面渲染，主题自然跟随、可自适应窄宽；点击卡片即从该节点继续漫游。
-> **English** — An Obsidian plugin that brings the **graph-roam** engine (seren) into Obsidian. The panel is a native Obsidian UI — theme follows automatically and it adapts to narrow widths; clicking a card continues roaming from that node.
+<p align="center">
+  <strong>🌐 语言 / Language：</strong>
+  🇨🇳 <strong>简体中文</strong> ·
+  <a href="README.en.md">🇺🇸 English</a>
+</p>
 
-> 关联 / Related: [`serendipity-engine`](https://github.com/heptaspirit/serendipity-engine)（Go 内核 / Go core + Web UI + release binaries）· API 契约 / API contract（本仓库与引擎的**唯一共享物** / the **only shared artifact** between this repo and the engine — change it and sync both sides）
+> 图谱漫游：给 Obsidian 装「奇遇记引擎」——把引擎（seren）的漫游能力带进笔记库。
+>
+> 白盒、本地、纯原生。面板是 Obsidian 原生界面，主题自然跟随、可响应窄宽；点卡片即从该节点继续漫游。
 
----
+[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v0.1.0-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-%E6%8F%92%E4%BB%B6-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20%E5%8F%AF%E6%8E%A5%E5%85%A5-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md)
 
-## 依赖 / Requires
+## 特性
 
-**serendipity-engine ≥ v0.1.13**
+- **原生面板**：搜索 + 🎲 随机漫游、热门节点气泡云、结果卡片（点卡片 = 从该节点继续漫游；点「相似」= 相似节点弹窗；点「打开」= 跳回笔记）；参数与相似用 Obsidian 原生 Modal
+- **引擎管理**：工具栏可停止引擎（⏹）、刷新图、调参数；跨平台探测 `seren.exe` / `seren` 并补 unix 可执行位
+- **行为信号 digest**：引擎有新的 touch 聚合时，状态栏被动提醒（非弹窗）；点击查看，可一键导出为 `serendipity-digest-*.md` 笔记
+- **MCP 接入**：设置页显示一键复制的 MCP 配置（`seren mcp <vault>`），主界面显示 MCP 就绪状态
+- **完整界面**：命令「打开引擎完整界面」用浏览器打开引擎 Web UI（关系 / 相似 / 社区 / 导出 / 参数调优）
 
-引擎单独安装/运行，本插件是轻客户端、**不打包引擎**。
-The engine is installed/run separately; this plugin is a light client and does **not** bundle the engine.
+## 依赖
 
----
+- **引擎** `serendipity-engine ≥ v0.1.14`（轻客户端，不打包引擎）
+- **Obsidian** ≥ v1.5.0
 
-## 安装 / Install
+> **关于版本号**：插件与引擎使用**独立版本号**——引擎是成熟内核（当前 v0.1.14），本插件是独立发布的新客户端（当前 **v0.1.0**）。引擎版本只作为**兼容性下限**：连接时插件比对 `stats.version`，仅当引擎**低于 v0.1.14**（缺 `/api/touch/digest` 等端点）才提示升级。
+
+## 安装
 
 1. 把本仓库拷入 Obsidian 插件文件夹：`<vault>/.obsidian/plugins/serendipity-engine/`
-   Copy this repo into the Obsidian plugins folder: `<vault>/.obsidian/plugins/serendipity-engine/`
-2. Obsidian 设置 → 第三方插件 → 启用「Serendipity Engine」；在插件设置里配置**引擎核心路径**（或把引擎二进制放在插件目录 / 加入 PATH）。
-   Obsidian Settings → Community plugins → enable **Serendipity Engine**; in its settings set the **engine core path** (or drop the engine binary in the plugin folder / add it to PATH).
+2. Obsidian 设置 → 第三方插件 → 启用「Serendipity Engine」；在其设置中配置**引擎核心路径**（或把引擎二进制放插件目录 / 加入 PATH）
 
-> 插件会自动探测本地引擎服务（`http://127.0.0.1:<port>`）。若未运行，面板会显示状态页——区分「未找到引擎可执行文件」（配置问题）与「引擎未启动」（点启动即可）。
-> The plugin auto-detects the local engine service (`http://127.0.0.1:<port>`). If it isn't running, the panel shows a status page that distinguishes "engine executable not found" (a config issue) from "engine not running" (just click Start).
+> 插件自动探测本地引擎服务（`http://127.0.0.1:<port>`）。未运行时面板显示状态页——区分「未找到引擎可执行文件」（配置问题）与「引擎未启动」（点启动即可）。
 
----
+## 快速开始
 
-## 功能 / Features
+启动引擎后，在面板搜索 / 🎲 随机漫游即可；高级功能（关系 / 相似 / 社区 / 导出 / 参数调优）经命令「打开引擎完整界面」进引擎 Web UI。
 
-- **原生面板 / Native panel** — 搜索 + 🎲 随机漫游、热门节点气泡云、结果卡片（点卡片=从该节点继续漫游；点「相似」=相似节点弹窗；点「打开」=跳回笔记）；参数与相似用 Obsidian 原生 Modal。
-  Search + 🎲 random roam, a popular-nodes bubble cloud, and result cards (click a card to continue roaming from that node; "Similar" opens a similar-nodes modal; "Open" jumps back to the note); params and similar use native Obsidian modals.
-- **引擎管理 / Engine control** — 工具栏可**停止引擎（⏹）**、刷新图、调参数；跨平台探测 `seren.exe` / `seren` 并补 unix 可执行位。
-  Toolbar can **stop the engine (⏹)** , refresh the graph, and tune params; detects `seren.exe` / `seren` across platforms and sets the unix exec bit.
-- **完整界面 / Full UI** — 命令「打开引擎完整界面」用系统浏览器打开引擎 Web UI（关系 / 相似 / 社区 / 导出 / 参数调优）。
-  The command "Open engine full UI" opens the engine Web UI in a system browser (relation / similar / communities / export / params).
-- **反馈埋点 / Implicit touch** — 切换活动笔记与点卡片时上报 `/api/touch`（仅记录，不影响排序）。
-  Reports `/api/touch` on active-note change and card clicks (record-only, no ranking impact).
-- **生命周期 / Lifecycle** — INSTALLED → CONFIGURED → RUNNING ⇄ CORE_STOPPED → DISABLED。
+## MCP 接入（AI）
 
----
+设置页（或在面板点 MCP 状态）即可**一键复制** `mcpServers` 配置，粘贴到任意 MCP 客户端（Codex / DeepSeek Harness / Claude Code / Cursor / 其他 agent）：
 
-## 本地开发 / Development
+```json
+{
+  "mcpServers": {
+    "seren": {
+      "command": "<seren 可执行文件>",
+      "args": ["mcp", "<vault>"]
+    }
+  }
+}
+```
+
+只读工具：`graph.stats / roam / random / relation / node / similar / community / touch_digest`（不写 touch、不触发 refresh——AI 会话不能改动本地状态）。
+
+## 开发
 
 ```bash
 npm install
-npm run build   # 产出 main.js（社区发布需 main.js / manifest.json / styles.css）
+npm run build   # 产出 main.js（发布需 main.js / manifest.json / styles.css）
 ```
 
-- 源码在 / Source in `src/`：`main.ts`（入口 / entry）、`view.ts`（原生面板 / native panel）、`settings.ts`、`api.ts`（REST 客户端 / REST client）、`i18n.ts`（双语 / i18n）、`seren-api.d.ts`（契约副本 / contract copy）
-- 构建用 **Rollup + @rollup/plugin-typescript**（`rollup.config.mjs`）→ 单文件 `main.js`；`styles.css` 是随仓库携带的源文件。
-  Built with **Rollup + @rollup/plugin-typescript** (`rollup.config.mjs`) → single-file `main.js`; `styles.css` ships as source.
-- 引擎二进制（seren）不打包：本地先用引擎仓库 `go build` 出的二进制（Windows 为 `seren.exe`，mac/linux 为 `seren`），或设置页填核心路径 / 走 PATH。
-  The engine binary (seren) isn't bundled: locally use one built from the engine repo (`seren.exe` on Windows, `seren` on mac/linux), or set the core path / use PATH.
+AI agent 请先读 [`AGENTS.md`](AGENTS.md)（定位 / 仓库地图 / 开发红线）。
 
-## 发布 / Release
+## 文档
 
-- GitHub release：**tag 必须与 `manifest.json` 的 version 一致**，上传 `main.js` / `manifest.json` / `styles.css`。
-  GitHub release: **tag must match the `manifest.json` version**; upload `main.js` / `manifest.json` / `styles.css`.
-- 社区目录：经 [community.obsidian.md](https://github.com/obsidianmd/obsidian-releases) 提交。
-  Community directory: submit via [community.obsidian.md](https://github.com/obsidianmd/obsidian-releases).
+| 文档 | 说明 |
+|---|---|
+| [`docs/api-contract.md`](docs/api-contract.md) | API 契约（插件 ↔ 引擎 REST）：鉴权、端点、版本策略。引擎侧唯一权威见引擎仓库；本地类型副本在 `src/seren-api.d.ts` |
+| [`docs/architecture.md`](docs/architecture.md) | 插件整体架构：原生面板、生命周期、进程管理、扩展点 |
+| [`docs/README.md`](docs/README.md) | 文档导航 |
 
-## 许可证 / License
+## License
 
-MIT —— see [LICENSE](LICENSE).
+MIT License —— see [LICENSE](LICENSE).

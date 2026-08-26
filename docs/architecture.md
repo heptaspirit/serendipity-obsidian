@@ -41,7 +41,7 @@ onload
  └─ registerView / 命令 / 设置页 / 状态栏 / 事件（registerEvent 自动解绑）
  └─ onLayoutReady(() => void ensureCore(); void checkVersion())   ← 后台，绝不阻塞 onload
       ensureCore: api.ping() 通 → RUNNING；不通 + managed + (force||autoStart) → spawn → waitHealthy
-      checkVersion: stats.version vs manifest.version（归一化去 v 前缀，D6）
+      checkVersion: stats.version（去 v 前缀）≥ REQUIRED_ENGINE（最低引擎要求；插件版本号独立）
 ```
 
 ### 3.2 spawn 契约
@@ -104,6 +104,8 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 |---|---|
 | 漫游历史/上一步回溯 | 原生 view 维护查询栈（对齐引擎 history 行为） |
 | 关系/统计/导出入口 | 原生 view 加按钮 → 新增 Modal（调 `/api/relation`、`/api/touch/stats`、导出 txt） |
+| **touch digest 消费（v0.1.14，引擎 §3.7）** | **已实现（见 [`api-contract.md`](api-contract.md) §5）**：`api.ts` 加 `touchDigest`/`touchDigestAck`；状态栏**被动提醒**（`digest_available` 轮询 30s，非弹窗）→ digest Modal（读 `/api/touch/digest`）→「导出为笔记」写 `serendipity-digest-<时间戳>.md` 入 vault（**引擎零写 vault，导出是插件职责**）+ ack。设置页「digest 提醒」开关 |
+| **MCP 配置（AI 接入，v0.1.14+）** | **已实现（见 [`api-contract.md`](api-contract.md) §6）**：`main.ts mcpConfigJson()` 生成 `mcpServers.seren`（`seren mcp <vault>`，不传 `--db`，避免复刻引擎 store sha256 路径）；设置页显示状态 + 配置 pre + 一键复制；主界面状态条显示「🔌 MCP 就绪 · 点击复制」。MCP 是 `seren mcp` 独立 stdio 入口（只读工具），非 `serve` 一部分——插件只能展示配置供复制，不能开关 |
 | 下载核心按钮（v1.x） | 设置页 + 引擎 GitHub release 取 asset 落盘（`fs`），启动仍靠用户 |
 | 显式刷新联动 | `vault.on('modify')` 节流 → `api.refresh()`（引擎已有自动 watch，可仅作补充） |
 | AI 协作（Flow 1 建议链接研判） | 插件侧 AI 模块 + 引擎 `/api/suggest-links`/`POST /api/edges`（见引擎 plugin-ai-cooperation） |

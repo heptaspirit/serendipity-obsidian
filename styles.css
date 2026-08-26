@@ -210,3 +210,53 @@
 
 /* ---- 设置页 ---- */
 .seren-settings-status-text { font-size: 0.95em; color: var(--text-muted); }
+
+/* ---- MCP 状态（主界面信息条内的可点击 chip）---- */
+.seren-mcp-chip {
+  color: var(--text-muted); cursor: pointer; flex: 0 0 auto;
+  border: 1px solid var(--background-modifier-border); border-radius: 999px;
+  padding: 1px 9px; margin-left: 8px; font-variant-numeric: tabular-nums;
+  transition: color 0.12s, border-color 0.12s;
+}
+.seren-mcp-chip:hover { color: var(--interactive-accent); border-color: var(--interactive-accent); }
+
+/* ---- MCP 配置（设置页等宽 pre 块）---- */
+.seren-mcp-config {
+  font-family: var(--font-monospace); font-size: 12px; line-height: 1.5;
+  color: var(--text-normal); background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s);
+  padding: 10px 12px; white-space: pre; overflow-x: auto; max-width: 100%;
+  user-select: text;
+}
+
+/* ---- 状态栏 digest 提醒（被动、可点击）---- */
+.seren-status-sep { color: var(--text-faint); }
+.seren-status-digest {
+  color: var(--interactive-accent); cursor: pointer; font-weight: 500;
+  transition: opacity 0.12s;
+}
+.seren-status-digest:hover { opacity: 0.8; text-decoration: underline; }
+
+/* ---- digest 查看 Modal ---- */
+.seren-digest-hdr {
+  display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+  margin: 4px 0 2px; font-size: 13px; color: var(--text-muted);
+}
+.seren-digest-since { color: var(--text-normal); }
+.seren-digest-total { font-variant-numeric: tabular-nums; }
+.seren-digest-sub {
+  font-size: 12px; font-weight: 600; color: var(--text-normal);
+  margin: 14px 0 4px; letter-spacing: 0.2px;
+}
+.seren-digest-list { display: flex; flex-direction: column; gap: 2px; }
+.seren-digest-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 10px; border-radius: var(--radius-m); font-size: 13px;
+}
+.seren-digest-row:nth-child(odd) { background: var(--background-secondary); }
+.seren-digest-lbl {
+  color: var(--text-normal); cursor: pointer; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.seren-digest-lbl:hover { color: var(--interactive-accent); }
+.seren-digest-count { color: var(--text-muted); font-size: 12px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }

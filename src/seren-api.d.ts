@@ -1,11 +1,11 @@
 // ============================================================================
 // seren-api.d.ts · Serendipity Engine REST 契约（插件侧副本）
 //
-// 依据：serendipity-engine/docs/api-contract.md（v0.1.13）。引擎与插件仓库的
+// 依据：serendipity-engine/docs/api-contract.md（v0.1.14）。引擎与插件仓库的
 // **唯一共享物**——改 API 必须同步两侧（引擎 api-contract.md ←→ 本文件）。
 // 插件侧只是类型描述，不含任何实现；具体网络代码见 src/api.ts。
 //
-// 注意：本文描述的行为以引擎 q/v0.1.13 为准，字段改动要在此登记。
+// 注意：本文描述的行为以引擎 v0.1.14 为准，字段改动要在此登记。
 // base：`http://127.0.0.1:<port>`（serve 默认 8910，始终绑定 127.0.0.1）。
 // 鉴权：所有 /api/* 请求带 `X-Seren-Token: <token>`（或 ?token=）；GET / 页面
 // 本体不需要 token（引擎注入 __SEREN_TOKEN__ 到页内，iframe 无感）。
@@ -15,9 +15,10 @@
 export interface SerenStats {
   nodes: number;
   edges: number;
-  version: string; // 引擎版本，如 "v0.1.13"
+  version: string; // 引擎版本，如 "v0.1.14"
   revision: number; // 图版本号：自动/手动刷新后 +1
   is_pending: boolean; // 库有变化待刷新
+  digest_available: boolean; // v0.1.14：有未读 touch digest（§3.7，被动提醒开关）
   dangling: number; // 悬空链接总条数
   dangling_refs: { source: string; target: string }[]; // 悬空明细（上限 50）
 }
@@ -207,3 +208,24 @@ export interface SerenSuggestLinks {
   count: number;
   results: SerenSuggestLink[];
 }
+
+/** /api/touch/digest · 最新 touch digest（v0.1.14，引擎 §3.7） */
+export interface SerenDigestTarget {
+  id: string; // 节点 ID（Obsidian 下 = 文件名去 .md）
+  title: string; // 标题（引擎已解析）
+  count: number; // 窗口内点击次数
+}
+export interface SerenDigest {
+  id: string; // 唯一 id（unix 纳秒）—— ack 用它
+  generated_at: number; // 生成时间（unix 秒）
+  window_start: number; // 窗口起点（上次 digest 时间，unix 秒）
+  since: string; // 窗口起点人读串（展示用）
+  total: number; // 窗口新增 touch 数
+  targets: SerenDigestTarget[]; // TopN（幽灵过滤 + 标题）
+  sources: { id: string; count: number }[]; // TopN 来源词
+}
+export interface SerenTouchDigestResp {
+  digest: SerenDigest | null; // 无 digest → null
+  available: boolean; // 有未读 digest
+}
+

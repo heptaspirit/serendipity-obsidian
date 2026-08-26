@@ -9,7 +9,7 @@
 import { ItemView, WorkspaceLeaf, Modal, Setting, Notice, App } from "obsidian";
 import type SerendipityPlugin from "./main";
 import { t } from "./i18n";
-import type { SerenRoam, SerenRoamItem, SerenHot, SerenConfig, SerenSimilar } from "./seren-api";
+import type { SerenRoam, SerenRoamItem, SerenHot, SerenConfig, SerenSimilar, SerenTouchDigestResp, SerenDigest } from "./seren-api";
 
 export const VIEW_TYPE_SEREN = "serendipity-engine-view";
 
@@ -137,6 +137,17 @@ export class SerendipityView extends ItemView {
     } catch {
       status.setText(t("loading"));
     }
+    // MCP 状态（主界面）：引擎已运行 → 就绪，点击复制配置
+    const mcp = status.createSpan({ cls: "seren-mcp-chip" });
+    mcp.setAttribute("role", "button");
+    mcp.setAttribute("tabindex", "0");
+    mcp.setAttribute("aria-label", t("copyMcpConfig"));
+    mcp.setAttribute("title", t("copyMcpConfig"));
+    mcp.setText(t("mcpStatusReady"));
+    mcp.addEventListener("click", () => void this.plugin.copyMcpConfig());
+    mcp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") void this.plugin.copyMcpConfig();
+    });
     // 初始：热门节点气泡云（web 界面同款味道），无 query 时不空屏
     await this.renderHot(input);
   }
@@ -340,6 +351,62 @@ class SerenSimilarModal extends Modal {
       }
     }
   }
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+export class SerenDigestModal extends Modal {
+  constructor(
+    app: App,
+    private plugin: SerendipityPlugin,
+    private resp: SerenTouchDigestResp,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h3", { text: t("digestTitle"), cls: "seren-modal-title" });
+    const d = this.resp.digest;
+    if (!d) {
+      contentEl.createDiv({ text: t("digestEmpty"), cls: "seren-empty-list" });
+      return;
+    }
+    const hdr = contentEl.createDiv({ cls: "seren-digest-hdr" });
+    hdr.createSpan({ text: `${t("digestSince")} ${d.since}`, cls: "seren-digest-since" });
+    hdr.createSpan({ text: `${t("digestTotal")} ${d.total}`, cls: "seren-digest-total" });
+
+    if (d.targets && d.targets.length) {
+      contentEl.createDiv({ text: t("digestTargets"), cls: "seren-digest-sub" });
+      const list = contentEl.createDiv({ cls: "seren-digest-list" });
+      for (const tg of d.targets) {
+        const row = list.createDiv({ cls: "seren-digest-row" });
+        const lbl = row.createSpan({ text: tg.title, cls: "seren-digest-lbl" });
+        lbl.setAttribute("title", t("open"));
+        lbl.addEventListener("click", () => this.plugin.openInObsidian(tg.id));
+        row.createSpan({ text: String(tg.count), cls: "seren-digest-count" });
+      }
+    } else {
+      contentEl.createDiv({ text: t("digestEmpty"), cls: "seren-empty-list" });
+    }
+
+    if (d.sources && d.sources.length) {
+      contentEl.createDiv({ text: t("digestSources"), cls: "seren-digest-sub" });
+      const list = contentEl.createDiv({ cls: "seren-digest-list" });
+      for (const s of d.sources) {
+        const row = list.createDiv({ cls: "seren-digest-row" });
+        row.createSpan({ text: s.id, cls: "seren-digest-lbl" });
+        row.createSpan({ text: String(s.count), cls: "seren-digest-count" });
+      }
+    }
+
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText(t("digestExport")).onClick(() => void this.plugin.exportDigest(d)))
+      .addButton((b) => b.setButtonText(t("done")).onClick(() => this.close()));
+  }
+
   onClose(): void {
     this.contentEl.empty();
   }

@@ -6,7 +6,8 @@
 //   - managed 模式（Obsidian）：原生能力 spawn 本地 seren 进程，随宿主启停；
 //     onunload 必须杀进程（否则留孤儿），以 registerEvent 自动清理事件。
 //   - 发现引擎：启动/连接时探测 http://127.0.0.1:<port>/api/stats，不通则占位。
-//   - 版本契约（D6）：连接时用 /api/stats 的 version 比对 manifest.version。
+//   - 版本契约：连接时用 /api/stats 的 version 与 REQUIRED_ENGINE（最低引擎要求）比对；
+//     插件自身版本号独立（见 manifest.version），与引擎版本解耦。
 //   - 生命周期（M2 §六）：INSTALLED → CONFIGURED → RUNNING ⇄ CORE_STOPPED → DISABLED。
 //   - 隐式 touch：active-leaf-change → POST /api/touch（仅记录不演化，引擎红线）。
 //
@@ -18,8 +19,9 @@ import { randomBytes } from "crypto";
 import { join, isAbsolute } from "path";
 import { existsSync, chmodSync } from "fs";
 import { SerenApi, SerenError } from "./api";
-import { SerendipityView, VIEW_TYPE_SEREN } from "./view";
+import { SerendipityView, SerenDigestModal, VIEW_TYPE_SEREN } from "./view";
 import { SerendipitySettingTab } from "./settings";
+import type { SerenDigest } from "./seren-api";
 
 export type LifecycleStatus =
   | "INSTALLED"
@@ -35,6 +37,7 @@ export interface SerendipitySettings {
   token: string; // 插件生成并传给 --token，插件自身调 API 用
   autoStart: boolean; // managed: onload 且未运行则拉起
   implicitTouch: boolean; // active-leaf-change → /api/touch
+  digestReminder: boolean; // digest_available → 状态栏提醒（被动，非弹窗）
   vaultNameOverride: string; // 可选，默认 vault.getName()
 }
 
@@ -45,8 +48,26 @@ const DEFAULT_SETTINGS: SerendipitySettings = {
   token: randomBytes(16).toString("hex"),
   autoStart: false, // 默认关：插件启用与内核解耦，不自动 spawn（避免启动时引擎整库解析拖慢 Obsidian）
   implicitTouch: true,
+  digestReminder: true,
   vaultNameOverride: "",
 };
+
+/** 引擎最低要求（v0.1.14 起含 /api/touch/digest + stats.digest_available）。
+ * 插件独立版本号（REQUIRED_ENGINE 是引擎兼容性下限，与插件自身版本解耦——见 docs/api-contract.md §3）。 */
+const REQUIRED_ENGINE = "0.1.14";
+
+/** 语义化版本比较：v ≥ min（逐段数值比较，避免 "0.1.9" > "0.1.14" 的字符串误判）。 */
+function isVersionAtLeast(v: string, min: string): boolean {
+  const pa = v.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = min.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const a = pa[i] ?? 0;
+    const b = pb[i] ?? 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return true;
+}
 
 export default class SerendipityPlugin extends Plugin {
   settings!: SerendipitySettings;
@@ -56,6 +77,8 @@ export default class SerendipityPlugin extends Plugin {
   private proc: ChildProcess | null = null;
   private statusBarText: HTMLElement | null = null;
   private touchTimer: ReturnType<typeof setTimeout> | null = null;
+  private digestTimer: ReturnType<typeof setInterval> | null = null;
+  private digestAvailable = false;
 
   get port(): number {
     return this.settings.corePort;
@@ -95,6 +118,7 @@ export default class SerendipityPlugin extends Plugin {
 
     this.statusBarText = this.addStatusBarItem();
     this.renderStatusBar();
+    this.startDigestPolling();
 
     // 隐式 touch（仅记录不演化）——active-leaf-change
     if (this.settings.implicitTouch) {
@@ -116,6 +140,7 @@ export default class SerendipityPlugin extends Plugin {
 
   onunload(): void {
     this.stopCore();
+    if (this.digestTimer) clearInterval(this.digestTimer);
     // registerEvent / registerView / 多米诺事件由 Obsidian 自动清理
   }
 
@@ -229,16 +254,17 @@ export default class SerendipityPlugin extends Plugin {
     return false;
   }
 
-  /** 连接时版本比对（D6）：/api/stats.version ≠ manifest.version → 提示升级。 */
+  /** 连接时引擎版本校验：/api/stats.version 必须 ≥ REQUIRED_ENGINE（最低引擎要求）。
+   * 插件有独立版本号，这里只验引擎是否够新（避免旧引擎缺 /api/touch/digest 等端点）。 */
   private async checkVersion(): Promise<void> {
     if (!(await this.api.ping())) return;
     try {
       const s = await this.api.stats();
-      // 引擎 version 带 "v"（如 v0.1.13），manifest.version 不带——归一化后比较。
-      const norm = (v: string | null | undefined) => (v ?? "").replace(/^v/i, "");
-      if (norm(s.version) !== norm(this.manifest.version)) {
+      // 引擎 version 带 "v"（如 v0.1.14）——归一化后再与最低要求比较。
+      const engine = (s.version ?? "").replace(/^v/i, "");
+      if (!isVersionAtLeast(engine, REQUIRED_ENGINE)) {
         new Notice(
-          `Serendipity: 引擎 ${s.version} 与本插件 ${this.manifest.version} 版本不匹配，请升级引擎（requires 契约）。`,
+          `Serendipity: 引擎 ${engine} 低于本插件要求的最低版本 v${REQUIRED_ENGINE}，请升级引擎（requires 契约）。`,
         );
       }
     } catch {
@@ -274,6 +300,16 @@ export default class SerendipityPlugin extends Plugin {
     } catch {
       return null;
     }
+  }
+
+  /** 引擎最低要求版本（供设置页展示）。 */
+  requiredEngineVersion(): string {
+    return REQUIRED_ENGINE;
+  }
+
+  /** 插件自身版本号（manifest.version，独立于引擎）。 */
+  pluginVersion(): string {
+    return this.manifest.version;
   }
 
   // ---- 面板 ----
@@ -403,6 +439,144 @@ export default class SerendipityPlugin extends Plugin {
     return this.api.ping();
   }
 
+  // ---- touch digest（v0.1.14，§3.7）被动提醒 ----
+
+  /** 周期性轮询 /api/stats 的 digest_available；变化才重绘状态栏（非弹窗）。 */
+  startDigestPolling(): void {
+    if (!this.settings.digestReminder) return;
+    if (this.digestTimer) clearInterval(this.digestTimer);
+    this.digestTimer = setInterval(() => void this.checkDigest(), 30000);
+  }
+
+  /** 外部（设置页）同步 digest 提醒开关状态。 */
+  setDigestAvailable(avail: boolean): void {
+    this.digestAvailable = avail;
+    this.renderStatusBar();
+  }
+
+  private async checkDigest(): Promise<void> {
+    if (!this.settings.digestReminder) return;
+    if (!(await this.api.ping())) return;
+    try {
+      const s = await this.api.stats();
+      const avail = Boolean(s.digest_available);
+      if (avail !== this.digestAvailable) {
+        this.digestAvailable = avail;
+        this.renderStatusBar();
+      }
+    } catch {
+      /* 探测已过，静默 */
+    }
+  }
+
+  /** 打开最新 digest 查看（状态栏「📋 有新的 digest」点击）。查看后即 ack 清提醒。 */
+  async openDigest(): Promise<void> {
+    let resp;
+    try {
+      resp = await this.api.touchDigest();
+    } catch (e) {
+      console.error("[seren] digest 读取失败", e);
+      new Notice("Serendipity: digest 读取失败");
+      return;
+    }
+    if (resp.digest) {
+      // ack 只清提醒，不碰引擎任何数据（红线：touch 只读）
+      try {
+        await this.api.touchDigestAck(resp.digest.id);
+      } catch {
+        /* ignore */
+      }
+      this.digestAvailable = false;
+      this.renderStatusBar();
+    }
+    new SerenDigestModal(this.app, this, resp).open();
+  }
+
+  /** 导出 digest 为 vault 笔记（引擎零写 vault——文件由插件主动生成）。 */
+  async exportDigest(d: SerenDigest): Promise<void> {
+    const ts = this.timestamp(new Date());
+    const name = `serendipity-digest-${ts}.md`;
+    const body = this.digestMarkdown(d);
+    try {
+      await this.app.vault.create(name, body);
+      new Notice(`Serendipity: 已导出 ${name}`);
+    } catch (e) {
+      console.error("[seren] 导出 digest 失败", e);
+      new Notice("Serendipity: 导出 digest 失败");
+    }
+  }
+
+  private timestamp(d: Date): string {
+    const p = (n: number, w = 2) => String(n).padStart(w, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+
+  private digestMarkdown(d: SerenDigest): string {
+    const zh = (navigator.language || "en").toLowerCase().startsWith("zh");
+    const lines: string[] = [];
+    if (zh) {
+      lines.push(`# Serendipity 行为信号 digest · ${d.since}`);
+      lines.push(`> 窗口内新增 touch：**${d.total}** 次。`);
+      lines.push("");
+      lines.push("## 被反复点击");
+    } else {
+      lines.push(`# Serendipity behavior digest · ${d.since}`);
+      lines.push(`> New touches in window: **${d.total}**.`);
+      lines.push("");
+      lines.push("## Top clicked");
+    }
+    for (const t of d.targets ?? []) lines.push(`- ${t.title} — ${t.count}`);
+    if (zh) lines.push(`\n## 来源词`);
+    else lines.push(`\n## Source queries`);
+    for (const s of d.sources ?? []) lines.push(`- \`${s.id}\` — ${s.count}`);
+    lines.push("");
+    lines.push(zh ? `> 由 Obsidian 插件导出 · ${new Date().toISOString()}` : `> Exported by the Obsidian plugin · ${new Date().toISOString()}`);
+    return lines.join("\n");
+  }
+
+  // ---- MCP（AI 接入）配置 ----
+
+  /** 引擎是否已运行（MCP 配置可用的前提）。 */
+  mcpReady(): boolean {
+    return this.status === "RUNNING";
+  }
+
+  /** 生成可粘贴到任意 MCP 客户端的 mcpServers 配置 JSON（seren mcp <vault>，读取源）。
+   * 只用 <vault>（不传 --db）——MCP 从源重解析，无需在插件侧复刻引擎 store 的 sha256 路径，任何平台都成立。 */
+  mcpConfigJson(): string {
+    const info = this.coreSearchInfo();
+    const cmd = info.found ? info.path : process.platform === "win32" ? "seren.exe" : "seren";
+    const cfg = {
+      mcpServers: {
+        seren: {
+          command: cmd,
+          args: ["mcp", this.vaultPath()],
+        },
+      },
+    };
+    return JSON.stringify(cfg, null, 2);
+  }
+
+  /** 复制 MCP 配置到剪贴板（Obsidian Electron：优先 navigator.clipboard，失败回退 electron.clipboard）。 */
+  async copyMcpConfig(): Promise<void> {
+    const text = this.mcpConfigJson();
+    try {
+      await navigator.clipboard.writeText(text);
+      new Notice("Serendipity: MCP 配置已复制");
+      return;
+    } catch {
+      /* 回退 */
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { clipboard } = require("electron");
+      clipboard.writeText(text);
+      new Notice("Serendipity: MCP 配置已复制");
+    } catch {
+      new Notice("Serendipity: 复制失败，请手动选择复制");
+    }
+  }
+
   private renderStatusBar(): void {
     if (!this.statusBarText) return;
     this.statusBarText.empty();
@@ -414,6 +588,19 @@ export default class SerendipityPlugin extends Plugin {
     this.statusBarText.appendChild(icon);
     this.statusBarText.appendChild(label);
     this.statusBarText.setAttribute("aria-label", `Serendipity: ${this.status}`);
+    // digest 被动提醒（非弹窗）：digest_available 且开关开 → 显示可点击「有新的 digest」
+    if (this.digestAvailable && this.settings.digestReminder) {
+      const sep = this.statusBarText.createSpan({ text: " · ", cls: "seren-status-sep" });
+      void sep;
+      const btn = this.statusBarText.createSpan({ text: "📋 有新的 digest", cls: "seren-status-digest" });
+      btn.setAttribute("role", "button");
+      btn.setAttribute("aria-label", "查看最新行为信号 digest");
+      btn.addEventListener("click", () => void this.openDigest());
+      btn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") void this.openDigest();
+      });
+      btn.setAttribute("tabindex", "0");
+    }
   }
 
   async loadSettings(): Promise<void> {

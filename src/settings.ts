@@ -24,9 +24,9 @@ export class SerendipitySettingTab extends PluginSettingTab {
       cls: "setting-item-description",
     });
 
-    // 当前生命周期状态
+    // 当前生命周期状态 + 版本信息（插件独立版本号 / 引擎最低要求）
     containerEl.createEl("section", { cls: "seren-settings-status" }).createEl("p", {
-      text: `当前状态: ${this.plugin.status}`,
+      text: `当前状态: ${this.plugin.status} · 插件 ${this.plugin.pluginVersion()} · 要求引擎 ≥ v${this.plugin.requiredEngineVersion()}`,
       cls: "seren-settings-status-text",
     });
 
@@ -128,6 +128,22 @@ export class SerendipitySettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("digest 提醒")
+      .setDesc(
+        "引擎有新的行为信号（touch digest）时在状态栏轻量提醒（被动、非弹窗）；关闭则不轮询 digest_available。",
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.digestReminder).onChange(async (v) => {
+          this.plugin.settings.digestReminder = v;
+          this.plugin.startDigestPolling();
+          if (!v) {
+            this.plugin.setDigestAvailable(false);
+          }
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
       .setName("Vault 名覆盖")
       .setDesc(
         "可选。传给引擎 --vault-name 以生成 obsidian:// 跳转；留空用当前 vault 名。",
@@ -157,6 +173,27 @@ export class SerendipitySettingTab extends PluginSettingTab {
       .addButton((b) =>
         b.setButtonText("停止").onClick(async () => {
           this.plugin.stopEngine();
+          this.display();
+        }),
+      );
+
+    // ---- MCP（AI 接入）----
+    containerEl.createEl("h3", { text: "MCP（AI 接入）" });
+    const mcpReady = this.plugin.mcpReady();
+    containerEl.createEl("p", {
+      text: `MCP 状态: ${mcpReady ? "已就绪（引擎运行中，AI 可接入）" : "未就绪（引擎未运行，先启动引擎）"}`,
+      cls: "seren-settings-status-text",
+    });
+    const pre = containerEl.createEl("pre", { cls: "seren-mcp-config" });
+    pre.setText(this.plugin.mcpConfigJson());
+    new Setting(containerEl)
+      .setName("复制 MCP 配置")
+      .setDesc(
+        "把下方的 mcpServers 配置粘贴到任意 MCP 客户端（Codex / DeepSeek Harness / Claude Code / Cursor 等）的 mcpServers，即可让 AI 消费引擎只读工具（graph.stats / roam / random / relation / node / similar / community / touch_digest）。",
+      )
+      .addButton((b) =>
+        b.setButtonText("复制 MCP 配置").onClick(async () => {
+          await this.plugin.copyMcpConfig();
           this.display();
         }),
       );

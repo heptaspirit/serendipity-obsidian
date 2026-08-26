@@ -1,6 +1,6 @@
 {
   "name": "serendipity-obsidian",
-  "version": "0.1.13",
+  "version": "0.1.0",
   "description": "Serendipity Engine · Obsidian thin-shell plugin (iframe the engine's self-served Web UI)",
   "main": "main.js",
   "scripts": {

@@ -1,7 +1,7 @@
 {
   "id": "serendipity-engine",
   "name": "Serendipity Engine",
-  "version": "0.1.13",
+  "version": "0.1.0",
   "minAppVersion": "1.5.0",
   "description": "图谱漫游：给笔记双链装上激活引擎——你问一个点，它给你一片。（原生 Obsidian 界面插件 / A native Obsidian panel for the graph-roam engine）",
   "author": "heptaspirit",
