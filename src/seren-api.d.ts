@@ -1,11 +1,11 @@
 // ============================================================================
 // seren-api.d.ts · Serendipity Engine REST 契约（插件侧副本）
 //
-// 依据：serendipity-engine/docs/api-contract.md（v0.1.14）。引擎与插件仓库的
+// 依据：serendipity-engine/docs/api-contract.md（v0.2.0）。引擎与插件仓库的
 // **唯一共享物**——改 API 必须同步两侧（引擎 api-contract.md ←→ 本文件）。
 // 插件侧只是类型描述，不含任何实现；具体网络代码见 src/api.ts。
 //
-// 注意：本文描述的行为以引擎 v0.1.14 为准，字段改动要在此登记。
+// 注意：本文描述的行为以引擎 v0.2.0 为准，字段改动要在此登记。
 // base：`http://127.0.0.1:<port>`（serve 默认 8910，始终绑定 127.0.0.1）。
 // 鉴权：所有 /api/* 请求带 `X-Seren-Token: <token>`（或 ?token=）；GET / 页面
 // 本体不需要 token（引擎注入 __SEREN_TOKEN__ 到页内，iframe 无感）。
@@ -13,9 +13,10 @@
 
 /** /api/stats · 库规模 */
 export interface SerenStats {
+  configured: boolean; // v0.2.0：是否已配库（v0.1.15 无库启动 → false；插件 spawn 带 vault → true）
   nodes: number;
   edges: number;
-  version: string; // 引擎版本，如 "v0.1.14"
+  version: string; // 引擎版本，如 "v0.2.0"
   revision: number; // 图版本号：自动/手动刷新后 +1
   is_pending: boolean; // 库有变化待刷新
   digest_available: boolean; // v0.1.14：有未读 touch digest（§3.7，被动提醒开关）
@@ -227,5 +228,14 @@ export interface SerenDigest {
 export interface SerenTouchDigestResp {
   digest: SerenDigest | null; // 无 digest → null
   available: boolean; // 有未读 digest
+}
+
+/** /api/mcp/status · serve 内嵌 MCP 状态（v0.2.0，§15）。旧引擎（无 /api/mcp）→ 端点 404。 */
+export interface SerenMcpStatus {
+  enabled: boolean; // /mcp 是否可访问（启停开关，内存态——重启 serve 后回默认开）
+  configured: boolean; // 是否已配库（未配库时 MCP 工具给引导，无数据）
+  tools: number; // 工具数（v0.2.0 = 9）
+  transport?: string; // "streamable-http"
+  endpoint?: string; // "/mcp"
 }
 

@@ -47,6 +47,7 @@ const DICT: Dict = {
   openFullUi: { zh: "打开引擎完整界面", en: "Open engine full UI" },
   nodes: { zh: "节点", en: "nodes" },
   edges: { zh: "边", en: "edges" },
+  notConfigured: { zh: "未配置库", en: "library not configured" },
   refresh: { zh: "对账刷新", en: "Refresh" },
   params: { zh: "漫游参数", en: "Params" },
   refreshDone: {
@@ -72,8 +73,37 @@ const DICT: Dict = {
   digestSources: { zh: "来源词", en: "Source queries" },
   digestEmpty: { zh: "暂无 digest", en: "No digest yet" },
   digestExport: { zh: "导出为笔记", en: "Export as note" },
-  mcpStatusReady: { zh: "🔌 MCP 就绪 · 点击复制", en: "🔌 MCP ready · click to copy" },
+  mcpStatusLoading: { zh: "🔌 MCP…", en: "🔌 MCP…" },
   copyMcpConfig: { zh: "一键复制 MCP 配置", en: "Copy MCP config" },
+  mcpStatusEnabled: { zh: "🔌 MCP 已启用 · 点击复制", en: "🔌 MCP enabled · click to copy" },
+  mcpStatusDisabled: { zh: "🔌 MCP 已停用 · 点击复制", en: "🔌 MCP disabled · click to copy" },
+  mcpStatusNoVault: { zh: "🔌 MCP 未配库", en: "🔌 MCP not configured" },
+  mcpStatusLegacy: { zh: "🔌 MCP 旧引擎", en: "🔌 MCP legacy engine" },
+  // ---- 当前节点操作栏（v0.2.0 前端回填）----
+  curNodePh: { zh: "当前节点", en: "Current node" },
+  preview: { zh: "详情", en: "Preview" },
+  relation: { zh: "关系", en: "Relation" },
+  // ---- 节点详情（预览）Modal ----
+  detailTitle: { zh: "节点详情", en: "Node detail" },
+  detailFail: { zh: "详情读取失败", en: "Failed to load detail" },
+  detailTextNone: { zh: "（无正文摘要）", en: "(no text summary)" },
+  neighbors: { zh: "邻居", en: "Neighbors" },
+  backlinks: { zh: "被引用", en: "Backlinks" },
+  deg: { zh: "度", en: "deg" },
+  none: { zh: "（无）", en: "(none)" },
+  // ---- 关系查询 Modal ----
+  relTitle: { zh: "两节点关系", en: "Node relation" },
+  relHint: { zh: "从当前节点出发，输入另一节点名/ID，看它们之间有多近（链路 + 强度证据）。", en: "From the current node, enter another node name/ID to see how close they are (path + strength evidence)." },
+  relFrom: { zh: "从", en: "From" },
+  relTo: { zh: "到", en: "To" },
+  relToPh: { zh: "另一节点名 / ID", en: "another node name / ID" },
+  relGo: { zh: "查询关系", en: "Query" },
+  relEmpty: { zh: "请填两个节点", en: "Fill both nodes" },
+  relNoPath: { zh: "两节点不可达", en: "Unreachable" },
+  relFail: { zh: "查询失败", en: "Query failed" },
+  relStats: { zh: "激活", en: "act" },
+  relEvidence: { zh: "证据", en: "Evidence" },
+  relDirect: { zh: "直达边", en: "direct edge" },
 };
 
 const LANG = (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";

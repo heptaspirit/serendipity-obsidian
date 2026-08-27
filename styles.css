@@ -210,6 +210,7 @@
 
 /* ---- 设置页 ---- */
 .seren-settings-status-text { font-size: 0.95em; color: var(--text-muted); }
+.seren-settings-mcp-toggle { margin-bottom: 10px; }
 
 /* ---- MCP 状态（主界面信息条内的可点击 chip）---- */
 .seren-mcp-chip {
@@ -260,3 +261,49 @@
 }
 .seren-digest-lbl:hover { color: var(--interactive-accent); }
 .seren-digest-count { color: var(--text-muted); font-size: 12px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
+/* ---- 当前节点操作栏（v0.2.0 前端回填）---- */
+.seren-current-node {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 10px; padding: 8px 10px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-m);
+}
+.seren-current-node-label { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
+.seren-current-node-title {
+  font-weight: 600; color: var(--text-normal); font-size: 14px;
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.seren-current-node-title:hover { color: var(--interactive-accent); }
+.seren-current-node-alias { font-style: italic; color: var(--interactive-accent); }
+.seren-current-node .seren-chip { margin-left: 2px; }
+
+/* ---- 节点详情 / 关系 Modal ---- */
+.seren-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.seren-detail-title { font-size: 16px; font-weight: 600; color: var(--text-normal); }
+.seren-detail-tag {
+  font-size: 11px; color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s);
+  padding: 1px 8px; text-transform: uppercase; letter-spacing: 0.4px; flex: 0 0 auto;
+}
+.seren-detail-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-faint); margin-bottom: 6px; }
+.seren-detail-id { font-family: var(--font-monospace); font-size: 11.5px; }
+.seren-detail-text { font-size: 13px; color: var(--text-normal); line-height: 1.6; margin: 6px 0 10px; word-break: break-word; }
+.seren-detail-empty { color: var(--text-faint); font-style: italic; }
+.seren-detail-group { font-size: 12px; color: var(--text-muted); margin: 10px 0 4px; font-weight: 600; letter-spacing: 0.2px; }
+.seren-detail-nodes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+.seren-detail-group-type { font-size: 11px; color: var(--text-faint); margin-right: 2px; }
+.seren-node-pill {
+  font-size: 12px; color: var(--interactive-accent);
+  background: transparent; border: 1px dashed var(--interactive-accent);
+  border-radius: 999px; padding: 2px 10px; cursor: pointer; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.seren-node-pill:hover { background: var(--background-modifier-hover); color: var(--interactive-accent); }
+.seren-rel-result { margin-top: 8px; }
+.seren-rel-path { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }
+.seren-rel-arrow { color: var(--text-faint); }
+.seren-rel-stats { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-variant-numeric: tabular-nums; }

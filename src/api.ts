@@ -22,6 +22,7 @@ import type {
   SerenSuggestLinks,
   SerenHot,
   SerenTouchDigestResp,
+  SerenMcpStatus,
 } from "./seren-api";
 
 export interface SerenConnection {
@@ -161,5 +162,20 @@ export class SerenApi {
   /** 标记 digest 已读（v0.1.14）。只写 touch store meta，不碰 touch 事件、不反馈排序。 */
   async touchDigestAck(id: string): Promise<void> {
     await this.post("/api/touch/digest/ack", { id });
+  }
+
+  /** serve 内嵌 MCP 状态（v0.2.0，§15.1）。旧引擎无 /api/mcp → 该请求抛 SerenError（404）。 */
+  mcpStatus(): Promise<SerenMcpStatus> {
+    return this.get<SerenMcpStatus>("/api/mcp/status");
+  }
+
+  /** 启用 /mcp 端点（v0.2.0，§15.2）。只切 serve 内存态，重启回默认开。 */
+  mcpEnable(): Promise<{ ok: boolean; enabled: boolean }> {
+    return this.post("/api/mcp/enable", {});
+  }
+
+  /** 停用 /mcp 端点（v0.2.0，§15.3）。停用后 /mcp 返回 404。 */
+  mcpDisable(): Promise<{ ok: boolean; enabled: boolean }> {
+    return this.post("/api/mcp/disable", {});
   }
 }

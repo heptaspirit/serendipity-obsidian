@@ -9,7 +9,7 @@
 import { ItemView, WorkspaceLeaf, Modal, Setting, Notice, App } from "obsidian";
 import type SerendipityPlugin from "./main";
 import { t } from "./i18n";
-import type { SerenRoam, SerenRoamItem, SerenHot, SerenConfig, SerenSimilar, SerenTouchDigestResp, SerenDigest } from "./seren-api";
+import type { SerenRoam, SerenRoamItem, SerenHot, SerenConfig, SerenSimilar, SerenTouchDigestResp, SerenDigest, SerenAnchor, SerenNodeDetail, SerenRelation, SerenNodeRef } from "./seren-api";
 
 export const VIEW_TYPE_SEREN = "serendipity-engine-view";
 
@@ -133,20 +133,28 @@ export class SerendipityView extends ItemView {
   private async loadHome(status: HTMLElement, input: HTMLInputElement): Promise<void> {
     try {
       const s = await this.plugin.api.stats();
-      status.setText(`${s.nodes} ${t("nodes")} · ${s.edges} ${t("edges")} · ${s.version}`);
+      const pre = s.configured === false ? `${t("notConfigured")} · ` : "";
+      status.setText(`${pre}${s.nodes} ${t("nodes")} · ${s.edges} ${t("edges")} · ${s.version}`);
     } catch {
       status.setText(t("loading"));
     }
-    // MCP 状态（主界面）：引擎已运行 → 就绪，点击复制配置
+    // MCP 状态（主界面）：反映 serve 内嵌 /mcp 的实时启停状态（v0.2.0），点击复制配置
     const mcp = status.createSpan({ cls: "seren-mcp-chip" });
     mcp.setAttribute("role", "button");
     mcp.setAttribute("tabindex", "0");
     mcp.setAttribute("aria-label", t("copyMcpConfig"));
     mcp.setAttribute("title", t("copyMcpConfig"));
-    mcp.setText(t("mcpStatusReady"));
+    mcp.setText(t("mcpStatusLoading"));
     mcp.addEventListener("click", () => void this.plugin.copyMcpConfig());
     mcp.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") void this.plugin.copyMcpConfig();
+    });
+    // 异步查询 MCP 状态：已启用 / 已停用 / 未配库 / 旧引擎（无 /api/mcp）
+    void this.plugin.mcpStatus().then((st) => {
+      if (!mcp.isConnected) return;
+      if (!st) mcp.setText(t("mcpStatusLegacy"));
+      else if (!st.configured) mcp.setText(t("mcpStatusNoVault"));
+      else mcp.setText(st.enabled ? t("mcpStatusEnabled") : t("mcpStatusDisabled"));
     });
     // 初始：热门节点气泡云（web 界面同款味道），无 query 时不空屏
     await this.renderHot(input);
@@ -214,10 +222,15 @@ export class SerendipityView extends ItemView {
 
   private renderResults(body: HTMLElement, out: SerenRoam): void {
     body.empty();
-    if (out.anchors && out.anchors.length) {
+    // 锚点按 match（1-5）→ 度降序；主锚点（showA[0]）= 当前节点（v0.2.0 前端回填）。
+    const anchors = (out.anchors ?? []).slice().sort((a, b) => (b.match - a.match) || (b.deg - a.deg));
+    if (anchors.length) {
+      // 当前节点操作栏：对主锚点提供 详情/相似/关系 三键（参照引擎 Web UI #current-node）
+      this.renderCurrentNode(body, anchors[0]);
       const an = body.createDiv({ cls: "seren-anchors" });
-      for (const a of out.anchors) {
+      for (const a of anchors) {
         const c = an.createSpan({ cls: "seren-anchor", text: (a.random ? "🎲 " : "") + a.title });
+        c.setAttribute("title", a.id);
         c.addEventListener("click", () => void this.roam(a.id));
       }
     }
@@ -226,6 +239,28 @@ export class SerendipityView extends ItemView {
       return;
     }
     for (const item of out.results) body.appendChild(this.card(item));
+  }
+
+  /** 当前节点操作栏（v0.2.0）：标题（别名优先）+ 详情/相似/关系 三键。点标题 → 从该节点继续漫游。 */
+  private renderCurrentNode(body: HTMLElement, anchor: SerenAnchor): void {
+    const bar = body.createDiv({ cls: "seren-current-node" });
+    bar.createSpan({ text: t("curNodePh"), cls: "seren-current-node-label" });
+    const title = bar.createSpan({ text: anchor.title || anchor.id, cls: "seren-current-node-title" });
+    title.setAttribute("title", anchor.id);
+    title.addEventListener("click", () => this.roamNode(anchor.id));
+    // 主锚点标题若非人读的（如 "人物_002"），尽量显示别名（/api/node aliases，v0.1.15）
+    void this.plugin.api
+      .node(anchor.id)
+      .then((d) => {
+        if (d && Array.isArray(d.aliases) && d.aliases.length && title.isConnected) {
+          title.setText(d.aliases[0]);
+          title.addClass("seren-current-node-alias");
+        }
+      })
+      .catch(() => {});
+    this.chip(bar, t("preview"), () => void this.openNodeDetail(anchor.id, anchor.title || anchor.id));
+    this.chip(bar, t("similar"), () => void this.openSimilar(anchor.id, anchor.title || anchor.id));
+    this.chip(bar, t("relation"), () => void this.openRelation(anchor.id, anchor.title || anchor.id));
   }
 
   private card(item: SerenRoamItem): HTMLElement {
@@ -291,6 +326,32 @@ export class SerendipityView extends ItemView {
     new SerenSimilarModal(this.app, this, id, title, sim).open();
   }
 
+  // ---- 节点详情（预览）Modal（v0.2.0 前端回填）----
+  private async openNodeDetail(id: string, title: string): Promise<void> {
+    let d: SerenNodeDetail | null = null;
+    try {
+      d = await this.plugin.api.node(id);
+    } catch {
+      d = null;
+    }
+    new SerenNodeDetailModal(this.app, this, id, title, d).open();
+  }
+
+  // ---- 关系查询 Modal（v0.2.0 前端回填）----
+  private openRelation(id: string, title: string): void {
+    new SerenRelationModal(this.app, this, id, title).open();
+  }
+
+  /** 从某节点继续漫游（当前节点栏标题 / 详情 / 关系 Modal 的路径节点点击复用）。 */
+  roamNode(id: string): void {
+    void this.roam(id);
+  }
+
+  /** 查询两节点关系（供关系 Modal 用）。 */
+  relation(from: string, to: string): Promise<SerenRelation> {
+    return this.plugin.api.relation(from, to);
+  }
+
   /** 供 Modal 等子对象跳回笔记。 */
   openNode(id: string, uri?: string): void {
     void this.plugin.openInObsidian(id, uri);
@@ -351,6 +412,181 @@ class SerenSimilarModal extends Modal {
       }
     }
   }
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/** 节点详情（预览）Modal（v0.2.0 前端回填）。参照引擎 Web UI showPreview/detailGroup。 */
+class SerenNodeDetailModal extends Modal {
+  constructor(
+    app: App,
+    private view: SerendipityView,
+    private nodeId: string,
+    private nodeTitle: string,
+    private d: SerenNodeDetail | null,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h3", { text: t("detailTitle"), cls: "seren-modal-title" });
+    if (!this.d) {
+      contentEl.createDiv({ text: t("detailFail"), cls: "seren-empty-list" });
+      return;
+    }
+    const d = this.d;
+    const head = contentEl.createDiv({ cls: "seren-detail-head" });
+    head.createEl("span", { text: d.title || d.id, cls: "seren-detail-title" });
+    head.createEl("span", { text: d.type || "", cls: "seren-detail-tag" });
+    const meta = contentEl.createDiv({ cls: "seren-detail-meta" });
+    meta.createSpan({ text: `id: ${d.id}`, cls: "seren-detail-id" });
+    if (d.deg !== undefined) {
+      meta.createSpan({ text: `${t("deg")} ${d.deg}`, cls: "seren-detail-tag" });
+    }
+    if (d.text) contentEl.createDiv({ text: d.text, cls: "seren-detail-text" });
+    else contentEl.createDiv({ text: t("detailTextNone"), cls: "seren-detail-text seren-detail-empty" });
+    contentEl.appendChild(this.detailGroup(t("neighbors"), d.neighbors));
+    contentEl.appendChild(this.detailGroup(t("backlinks"), d.backlinks));
+  }
+
+  /** 邻居/被引用：按类型分组、去重、点击 → 从该节点继续漫游（关闭详情）。 */
+  private detailGroup(label: string, refs: SerenNodeRef[] | undefined): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.createDiv({ text: label, cls: "seren-detail-group" });
+    const seen = new Set<string>();
+    const uniq: SerenNodeRef[] = [];
+    for (const r of refs ?? []) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        uniq.push(r);
+      }
+    }
+    if (!uniq.length) {
+      wrap.createDiv({ text: t("none"), cls: "seren-detail-empty" });
+      return wrap;
+    }
+    const groups = new Map<string, SerenNodeRef[]>();
+    for (const r of uniq) {
+      const k = r.type || "note";
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(r);
+    }
+    for (const [type, nodes] of groups) {
+      const row = wrap.createDiv({ cls: "seren-detail-nodes" });
+      row.createSpan({ text: `${type} ·`, cls: "seren-detail-group-type" });
+      for (const r of nodes) {
+        const p = row.createEl("button", { cls: "seren-node-pill", text: r.title || r.id });
+        p.setAttribute("title", r.id);
+        p.addEventListener("click", () => {
+          this.close();
+          this.view.roamNode(r.id);
+        });
+      }
+    }
+    return wrap;
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/** 关系查询 Modal（v0.2.0 前端回填）。参照引擎 Web UI queryRelation：from 预填当前节点，to 手输。 */
+class SerenRelationModal extends Modal {
+  private fromEl: HTMLInputElement | null = null;
+  private toEl: HTMLInputElement | null = null;
+  private resultEl: HTMLElement | null = null;
+
+  constructor(
+    app: App,
+    private view: SerendipityView,
+    private fromId: string,
+    private fromTitle: string,
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h3", { text: t("relTitle"), cls: "seren-modal-title" });
+    contentEl.createDiv({ text: t("relHint"), cls: "seren-detail-text seren-detail-empty" });
+
+    new Setting(contentEl)
+      .setName(t("relFrom"))
+      .addText((tc) => {
+        tc.setValue(this.fromTitle || this.fromId);
+        this.fromEl = tc.inputEl;
+      });
+    new Setting(contentEl)
+      .setName(t("relTo"))
+      .addText((tc) => {
+        tc.setPlaceholder(t("relToPh"));
+        this.toEl = tc.inputEl;
+      });
+    new Setting(contentEl).addButton((b) =>
+      b.setButtonText(t("relGo")).setCta().onClick(() => void this.query()),
+    );
+    this.resultEl = contentEl.createDiv({ cls: "seren-rel-result" });
+    this.toEl?.focus();
+  }
+
+  private async query(): Promise<void> {
+    const el = this.resultEl;
+    if (!el) return;
+    const from = (this.fromEl?.value ?? "").trim();
+    const to = (this.toEl?.value ?? "").trim();
+    if (!from || !to) {
+      el.setText(t("relEmpty"));
+      return;
+    }
+    el.setText(t("loading"));
+    let r: SerenRelation;
+    try {
+      r = await this.view.relation(from, to);
+    } catch {
+      el.setText(t("relFail"));
+      return;
+    }
+    el.empty();
+    this.renderRel(r);
+  }
+
+  private renderRel(r: SerenRelation): void {
+    const el = this.resultEl!;
+    const path = r.path || [];
+    const pathNodes = r.path_nodes || [];
+    const nodeTitle = (id: string) => pathNodes.find((n) => n.id === id)?.title || id;
+    if (path.length) {
+      const maze = el.createDiv({ cls: "seren-rel-path" });
+      path.forEach((id, i) => {
+        if (i > 0) maze.createSpan({ text: " → ", cls: "seren-rel-arrow" });
+        const p = maze.createEl("button", { cls: "seren-node-pill", text: nodeTitle(id) });
+        p.setAttribute("title", id);
+        p.addEventListener("click", () => {
+          this.close();
+          this.view.roamNode(id);
+        });
+      });
+    } else {
+      el.createDiv({ text: t("relNoPath"), cls: "seren-detail-empty" });
+    }
+    const stats: string[] = [];
+    if (r.direct) stats.push(t("relDirect"));
+    if (r.affinity !== undefined) stats.push(`affinity ${r.affinity.toFixed(4)}`);
+    if (r.activation !== undefined) {
+      stats.push(`${t("relStats")} ${r.activation.toFixed(3)}${r.hops >= 0 ? ` (${r.hops}${t("hopUnit")})` : ""}`);
+    }
+    if (r.ppr_from_to !== undefined) stats.push(`ppr→ ${r.ppr_from_to.toFixed(4)}`);
+    if (r.ppr_to_from !== undefined) stats.push(`ppr← ${r.ppr_to_from.toFixed(4)}`);
+    if (stats.length) el.createDiv({ text: stats.join(" · "), cls: "seren-rel-stats" });
+    const evi = (r.evidence || []).map((ev) => (ev.witnesses || []).join("、")).filter(Boolean);
+    if (evi.length) el.createDiv({ text: `${t("relEvidence")}: ${evi.join("；")}`, cls: "seren-rel-stats" });
+  }
+
   onClose(): void {
     this.contentEl.empty();
   }

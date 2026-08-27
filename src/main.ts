@@ -21,7 +21,7 @@ import { existsSync, chmodSync } from "fs";
 import { SerenApi, SerenError } from "./api";
 import { SerendipityView, SerenDigestModal, VIEW_TYPE_SEREN } from "./view";
 import { SerendipitySettingTab } from "./settings";
-import type { SerenDigest } from "./seren-api";
+import type { SerenDigest, SerenMcpStatus } from "./seren-api";
 
 export type LifecycleStatus =
   | "INSTALLED"
@@ -52,9 +52,9 @@ const DEFAULT_SETTINGS: SerendipitySettings = {
   vaultNameOverride: "",
 };
 
-/** 引擎最低要求（v0.1.14 起含 /api/touch/digest + stats.digest_available）。
+/** 引擎最低要求（v0.2.0 起 serve 内嵌 /mcp + /api/mcp/*）。
  * 插件独立版本号（REQUIRED_ENGINE 是引擎兼容性下限，与插件自身版本解耦——见 docs/api-contract.md §3）。 */
-const REQUIRED_ENGINE = "0.1.14";
+const REQUIRED_ENGINE = "0.2.0";
 
 /** 语义化版本比较：v ≥ min（逐段数值比较，避免 "0.1.9" > "0.1.14" 的字符串误判）。 */
 function isVersionAtLeast(v: string, min: string): boolean {
@@ -536,21 +536,37 @@ export default class SerendipityPlugin extends Plugin {
 
   // ---- MCP（AI 接入）配置 ----
 
-  /** 引擎是否已运行（MCP 配置可用的前提）。 */
-  mcpReady(): boolean {
-    return this.status === "RUNNING";
+  /** 查询 serve 内嵌 MCP 状态（v0.2.0，/api/mcp/status）。未连接 / 旧引擎（无该端点）→ null，表示不可监控。 */
+  async mcpStatus(): Promise<SerenMcpStatus | null> {
+    if (!(await this.api.ping())) return null;
+    try {
+      return await this.api.mcpStatus();
+    } catch {
+      return null; // 旧引擎（无 /api/mcp）→ 非可监控
+    }
   }
 
-  /** 生成可粘贴到任意 MCP 客户端的 mcpServers 配置 JSON（seren mcp <vault>，读取源）。
-   * 只用 <vault>（不传 --db）——MCP 从源重解析，无需在插件侧复刻引擎 store 的 sha256 路径，任何平台都成立。 */
+  /** 切换 /mcp 端点启停（v0.2.0）。返回是否操作成功；引擎未运行 / 旧引擎 → false。 */
+  async setMcpEnabled(on: boolean): Promise<boolean> {
+    if (!(await this.api.ping())) return false;
+    try {
+      if (on) await this.api.mcpEnable();
+      else await this.api.mcpDisable();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 生成可粘贴到任意 MCP 客户端的 mcpServers 配置 JSON（serve 内嵌 /mcp，Streamable HTTP，v0.2.0）。
+   * 引擎 serve 运行时 MCP 才可接入（Web+REST+MCP 三合一）；/mcp 仅 Host 校验，token 头为附加保险（同引擎前端一键配置）。 */
   mcpConfigJson(): string {
-    const info = this.coreSearchInfo();
-    const cmd = info.found ? info.path : process.platform === "win32" ? "seren.exe" : "seren";
     const cfg = {
       mcpServers: {
         seren: {
-          command: cmd,
-          args: ["mcp", this.vaultPath()],
+          type: "streamable-http",
+          url: `http://127.0.0.1:${this.port}/mcp`,
+          headers: { "X-Seren-Token": this.settings.token },
         },
       },
     };

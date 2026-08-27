@@ -177,19 +177,19 @@ export class SerendipitySettingTab extends PluginSettingTab {
         }),
       );
 
-    // ---- MCP（AI 接入）----
+    // ---- MCP（AI 接入，v0.2.0 重写：serve 内嵌 /mcp + 状态启停）----
     containerEl.createEl("h3", { text: "MCP（AI 接入）" });
-    const mcpReady = this.plugin.mcpReady();
-    containerEl.createEl("p", {
-      text: `MCP 状态: ${mcpReady ? "已就绪（引擎运行中，AI 可接入）" : "未就绪（引擎未运行，先启动引擎）"}`,
+    const mcpStatusEl = containerEl.createEl("p", {
+      text: "MCP 状态: 加载中…",
       cls: "seren-settings-status-text",
     });
+    const mcpToggle = containerEl.createEl("button", { text: "停用 /mcp", cls: "seren-btn-ghost seren-settings-mcp-toggle" });
     const pre = containerEl.createEl("pre", { cls: "seren-mcp-config" });
     pre.setText(this.plugin.mcpConfigJson());
     new Setting(containerEl)
-      .setName("复制 MCP 配置")
+      .setName("复制 MCP 配置（Streamable HTTP）")
       .setDesc(
-        "把下方的 mcpServers 配置粘贴到任意 MCP 客户端（Codex / DeepSeek Harness / Claude Code / Cursor 等）的 mcpServers，即可让 AI 消费引擎只读工具（graph.stats / roam / random / relation / node / similar / community / touch_digest）。",
+        "引擎 serve 内嵌 MCP（/mcp 端点）：把下方的 mcpServers 配置粘贴到任意 MCP 客户端（Codex / DeepSeek Harness / Claude Code / Cursor 等），即可让 AI 消费只读工具（graph.stats / roam / random / relation / node / similar / community / touch_digest / state）。引擎须运行且 /mcp 已启用。",
       )
       .addButton((b) =>
         b.setButtonText("复制 MCP 配置").onClick(async () => {
@@ -197,5 +197,28 @@ export class SerendipitySettingTab extends PluginSettingTab {
           this.display();
         }),
       );
+
+    // 异步填充 MCP 真实状态（enabled/configured/tools/transport）+ 启停按钮
+    void this.plugin.mcpStatus().then((st) => {
+      if (!mcpStatusEl.isConnected) return;
+      if (!st) {
+        mcpStatusEl.setText("MCP 状态: 引擎未运行或旧引擎（无 /api/mcp）");
+        mcpToggle.remove();
+        return;
+      }
+      const on = st.enabled;
+      mcpStatusEl.setText(
+        `MCP 状态: ${on ? "已启用" : "已停用"} · 传输 ${st.transport || "streamable-http"} · 工具 ${st.tools} · ${st.configured ? "已配库" : "未配库"}${st.configured ? "" : "（先配置库才有数据）"}`,
+      );
+      mcpToggle.setText(on ? "停用 /mcp" : "启用 /mcp");
+      mcpToggle.addEventListener("click", async () => {
+        const ok = await this.plugin.setMcpEnabled(!on);
+        if (!ok) {
+          new Notice("MCP 启停失败（引擎未运行 / 旧引擎）");
+          return;
+        }
+        this.display();
+      });
+    });
   }
 }

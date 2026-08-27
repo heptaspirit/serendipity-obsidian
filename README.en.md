@@ -10,22 +10,23 @@
 >
 > White-box, local, pure native. The panel is a native Obsidian UI — the theme follows automatically and it adapts to narrow widths; click a card to continue roaming from that node.
 
-[![Version](https://img.shields.io/badge/version-v0.1.0-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20ready-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md)
+[![Version](https://img.shields.io/badge/version-v0.2.0-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20ready-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md)
 
 ## Features
 
 - **Native panel**: search + 🎲 random roam, a popular-nodes bubble cloud, and result cards (click a card = continue roaming from that node; "Similar" opens a similarity modal; "Open" jumps back to the note); params & similar use native Obsidian modals
+- **Current-node action bar**: after roaming, the main anchor gets a Preview/Similar/Relation action bar (mirrors the engine Web UI), with aliases preferred for the title
 - **Engine control**: the toolbar can stop the engine (⏹), refresh the graph, and tune params; detects `seren.exe` / `seren` across platforms and sets the unix exec bit
 - **Behavior digest**: a passive, non-popup status-bar reminder when the engine has a fresh touch digest; view it and export as a `serendipity-digest-*.md` note
-- **MCP (AI)**: the settings page shows a one-click copyable MCP config (`seren mcp <vault>`); the panel status shows MCP readiness
-- **Full UI**: the "Open engine full UI" command opens the engine Web UI in a browser (relation / similar / communities / export / params)
+- **MCP (AI)**: the settings page and panel status show the live embedded `/mcp` enable/disable state (with controls), plus a one-click copyable `mcpServers` (Streamable HTTP) config
+- **Full UI**: the "Open engine full UI" command opens the engine Web UI in a browser (communities / export / params)
 
 ## Requires
 
-- **Engine** `serendipity-engine ≥ v0.1.14` (a light client; the engine is not bundled)
+- **Engine** `serendipity-engine ≥ v0.2.0` (a light client; the engine is not bundled)
 - **Obsidian** ≥ v1.5.0
 
-> **About versioning**: the plugin and engine use **independent version numbers** — the engine is a mature core (currently v0.1.14), and this plugin is a separately released new client (currently **v0.1.0**). The engine version is only a **compatibility floor**: on connect the plugin compares `stats.version` and only warns if the engine is **below v0.1.14** (missing endpoints such as `/api/touch/digest`).
+> **About versioning**: the plugin and engine use **independent version numbers** — the engine is a mature core (currently v0.2.0), and this plugin is a separately released new client (currently **v0.2.0**). The engine version is only a **compatibility floor**: on connect the plugin compares `stats.version` and only warns if the engine is **below v0.2.0** (missing endpoints such as `/api/mcp/*`).
 
 ## Install
 
@@ -36,24 +37,25 @@
 
 ## Quick Start
 
-Start the engine, then search / 🎲 random-roam in the panel; advanced features (relation / similar / communities / export / params) live in the engine Web UI via the "Open engine full UI" command.
+Start the engine, then search / 🎲 random-roam in the panel; the panel's current-node bar covers Preview/Similar/Relation; more advanced features (communities / export / params) live in the engine Web UI via the "Open engine full UI" command.
 
-## MCP (AI)
+## MCP (AI, rewritten as Streamable HTTP in v0.2.0)
 
-The settings page (or tapping the MCP status in the panel) gives a **one-click copy** of the `mcpServers` config, to paste into any MCP client (Codex / DeepSeek Harness / Claude Code / Cursor / others):
+Since v0.2.0 the MCP server is **embedded** in the engine `serve` process (endpoint `/mcp`; Web+REST+MCP in one), so a standalone `seren mcp` process is no longer needed. The settings page (or tapping the MCP status in the panel) shows the live `/mcp` enable/disable state (with controls) and a **one-click copy** of the `mcpServers` config, to paste into any MCP client (Codex / DeepSeek Harness / Claude Code / Cursor / others):
 
 ```json
 {
   "mcpServers": {
     "seren": {
-      "command": "<seren executable>",
-      "args": ["mcp", "<vault>"]
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8910/mcp",
+      "headers": { "X-Seren-Token": "<token>" }
     }
   }
 }
 ```
 
-Read-only tools: `graph.stats / roam / random / relation / node / similar / community / touch_digest` (never writes touch, never triggers refresh — an AI session cannot mutate local state).
+Read-only tools: `graph.stats / roam / random / relation / node / similar / community / touch_digest / state` (never writes touch, never triggers refresh — an AI session cannot mutate local state). The engine must be running and `/mcp` enabled.
 
 ## Development
 
