@@ -49,7 +49,8 @@ npm run dev           # rollup -c --watch
 | `manifest.json` | 插件元数据（id/name/author/version/minAppVersion/description/isDesktopOnly，**均必填**）。`id=serendipity-engine`；`version` 是**插件自身版本**（独立于引擎，当前 `0.1.0`）。引擎兼容性下限由 `main.ts` 的 `REQUIRED_ENGINE` 声明 |
 | `src/main.ts` | 插件入口：onload/onunload、生命周期状态、managed spawn、探测+等待健康、版本比对、命令、状态栏、隐式 touch |
 | `src/view.ts` | ItemView 面板（**原生界面**）：查询漫游/随机漫步/结果卡片（点击跳回笔记、↺ 继续漫游）+ 三态（未找到/未启动/运行中）。原生 Obsidian DOM → 主题自动跟随、可响应窄宽。高级功能经命令「打开引擎完整界面」进引擎 Web UI |
-| `src/settings.ts` | 设置页：模式(managed/external)、端口、核心路径、token 重生成、自启、隐式 touch |
+| `src/settings.ts` | 设置页：模式(managed/external)、端口、核心路径、token 重生成、自启、隐式 touch、引擎核心下载 |
+| `src/engine-download.ts` | **引擎二进制下载**（GitHub Releases，唯一外网出口）：平台→资产名映射、查最新 release、下载；设置页「检查并下载」调用 |
 | `src/api.ts` | `SerenApi` REST 客户端（Obsidian `requestUrl`，本地 http 免 CORS），含健康探测 |
 | `src/seren-api.d.ts` | **API 契约类型副本**（D5，唯一共享物）。改 API 必须同步引擎 `docs/api-contract.md` |
 | `rollup.config.mjs` | 构建（输入 src/main.ts → 单文件 main.js，`module.exports = 插件类`） |
@@ -99,7 +100,7 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 1. **UI 边界**：面板是**原生轻界面**（核心漫游/跳回），直接消费引擎 REST；**不复制引擎完整 Web UI 的算法与富功能**（关系/相似/社区/导出仍在引擎 Web UI，经命令打开）。引擎零代码改动。
 2. **不打包引擎**（D4）：插件发布不含 seren 二进制；README 写 `requires serendipity-engine ≥ vX.Y`。
 3. **契约同步**（D5/D6）：改任何 `/api/*` → 必须同步引擎 `docs/api-contract.md` + 本仓库 `src/seren-api.d.ts`。插件版本号独立（`manifest.version`）；引擎版本作为兼容性下限，由 `main.ts` 的 `REQUIRED_ENGINE` 声明，连接时比对（≥ 才通过）。
-4. **安全红线**：引擎只读本地凭据类数据绝不读取；本插件只连 `127.0.0.1`；数据不出本机；二次确认弹窗（隐私披露）在启用前必展示。
+4. **安全红线**：引擎只读本地凭据类数据绝不读取；本插件只连 `127.0.0.1`；数据不出本机；二次确认弹窗（隐私披露）在启用前必展示。**唯一外网出口**：设置页「检查并下载」按用户按钮 + 二次确认从 GitHub Releases 拉引擎二进制（`src/engine-download.ts`，只取 release 元数据/二进制，不带任何 vault 数据）；除此之外无任何网络请求。
 5. **克制设计**：touch 埋点只记录不演化（绝不反馈排序/hot）；监听节流合并；不加中间态恢复逻辑。
 6. **启动非阻塞**：`onload` 绝不 `await` 引擎发现/启停（会阻塞 Obsidian 启动），一律 `onLayoutReady` 后台执行、结束再 `updateViews`。
 7. **质量**：改代码后 `npm run build` 通过；改契约 → 两侧同步；改文档 → `docs/README.md` 导航仍准确。
@@ -115,4 +116,4 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 - [ ] `npm run build` 通过（产出单文件 main.js）
 - [ ] 改了契约 → `src/seren-api.d.ts` 与引擎 `docs/api-contract.md` 已同步
 - [ ] onunload 记得杀 spawn 的子进程 / registerEvent 正确解绑
-- [ ] 未破坏薄壳边界（未复制引擎 UI · 未打包引擎 · 未加网络出口）
+- [ ] 未破坏薄壳边界（未复制引擎 UI · 未打包引擎 · 未加网络出口——唯一例外：设置页用户触发的引擎核心下载）

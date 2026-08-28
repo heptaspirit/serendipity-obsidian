@@ -10,7 +10,7 @@
 >
 > 白盒、本地、纯原生。面板是 Obsidian 原生界面，主题自然跟随、可响应窄宽；点卡片即从该节点继续漫游。
 
-[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v0.2.0-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-%E6%8F%92%E4%BB%B6-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20%E5%8F%AF%E6%8E%A5%E5%85%A5-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md)
+[![版本](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v0.2.1-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-%E6%8F%92%E4%BB%B6-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20%E5%8F%AF%E6%8E%A5%E5%85%A5-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md)
 
 ## 特性
 
@@ -26,12 +26,13 @@
 - **引擎** `serendipity-engine ≥ v0.2.0`（轻客户端，不打包引擎）
 - **Obsidian** ≥ v1.5.0
 
-> **关于版本号**：插件与引擎使用**独立版本号**——引擎是成熟内核（当前 v0.2.0），本插件是独立发布的新客户端（当前 **v0.2.0**）。引擎版本只作为**兼容性下限**：连接时插件比对 `stats.version`，仅当引擎**低于 v0.2.0**（缺 `/api/mcp/*` 等端点）才提示升级。
+> **关于版本号**：插件与引擎使用**独立版本号**——引擎是成熟内核（当前 v0.2.1），本插件是独立发布的新客户端（当前 **v0.2.1**）。引擎版本只作为**兼容性下限**：连接时插件比对 `stats.version`，仅当引擎**低于 v0.2.0**（缺 `/api/mcp/*` 等端点）才提示升级。
 
 ## 安装
 
 1. 把本仓库拷入 Obsidian 插件文件夹：`<vault>/.obsidian/plugins/serendipity-engine/`
-2. Obsidian 设置 → 第三方插件 → 启用「Serendipity Engine」；在其设置中配置**引擎核心路径**（或把引擎二进制放插件目录 / 加入 PATH）
+2. Obsidian 设置 → 第三方插件 → 启用「Serendipity Engine」
+3. 在插件设置 → **引擎核心** → 点「**检查并下载**」，自动按当前平台（windows-amd64 / linux-amd64 / linux-arm64 / darwin-amd64 / darwin-arm64）从 GitHub Releases 下载引擎二进制到插件目录；也可手动放置引擎二进制（插件目录 / 设置核心路径 / 加入 PATH）
 
 > 插件自动探测本地引擎服务（`http://127.0.0.1:<port>`）。未运行时面板显示状态页——区分「未找到引擎可执行文件」（配置问题）与「引擎未启动」（点启动即可）。
 
@@ -56,6 +57,11 @@ v0.2.0 起 MCP 由引擎 `serve` **内嵌**（端点 `/mcp`，Web+REST+MCP 三�
 ```
 
 只读工具：`graph.stats / roam / random / relation / node / similar / community / touch_digest / state`（不写 touch、不触发 refresh——AI 会话不能改动本地状态）。引擎须运行且 `/mcp` 已启用才可接入。
+
+## 隐私与网络使用
+
+- 插件与引擎的通信全部在本机 `127.0.0.1` 完成，vault 数据、笔记内容不出本机。
+- **唯一的外网请求**：设置页「引擎核心 → 检查并下载」在**你主动点击并二次确认后**，从引擎的 GitHub Releases（https://github.com/heptaspirit/serendipity-engine/releases ）拉取当前平台的引擎二进制并安装到插件目录。仅下载 release 元数据与该二进制，**不发送任何 vault 数据、笔记内容或使用行为**。不点击该按钮，插件不做任何网络请求。
 
 ## 开发
 

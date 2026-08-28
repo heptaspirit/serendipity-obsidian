@@ -10,7 +10,7 @@
 >
 > White-box, local, pure native. The panel is a native Obsidian UI — the theme follows automatically and it adapts to narrow widths; click a card to continue roaming from that node.
 
-[![Version](https://img.shields.io/badge/version-v0.2.0-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20ready-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md)
+[![Version](https://img.shields.io/badge/version-v0.2.1-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian/tags) [![License](https://img.shields.io/badge/License-MIT-9cf)](LICENSE) [![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7aa2f7)](https://obsidian.md/) [![MCP Server](https://img.shields.io/badge/MCP%20Server-AI%20ready-7aa2f7)](https://github.com/heptaspirit/serendipity-obsidian) [![English](https://img.shields.io/badge/English-README.en-7aa2f7)](README.en.md) [![简体中文](https://img.shields.io/badge/%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-README-7aa2f7)](README.md)
 
 ## Features
 
@@ -26,12 +26,13 @@
 - **Engine** `serendipity-engine ≥ v0.2.0` (a light client; the engine is not bundled)
 - **Obsidian** ≥ v1.5.0
 
-> **About versioning**: the plugin and engine use **independent version numbers** — the engine is a mature core (currently v0.2.0), and this plugin is a separately released new client (currently **v0.2.0**). The engine version is only a **compatibility floor**: on connect the plugin compares `stats.version` and only warns if the engine is **below v0.2.0** (missing endpoints such as `/api/mcp/*`).
+> **About versioning**: the plugin and engine use **independent version numbers** — the engine is a mature core (currently v0.2.1), and this plugin is a separately released new client (currently **v0.2.1**). The engine version is only a **compatibility floor**: on connect the plugin compares `stats.version` and only warns if the engine is **below v0.2.0** (missing endpoints such as `/api/mcp/*`).
 
 ## Install
 
 1. Copy this repo into the Obsidian plugins folder: `<vault>/.obsidian/plugins/serendipity-engine/`
-2. Obsidian Settings → Community plugins → enable **Serendipity Engine**; in its settings set the **engine core path** (or drop the engine binary in the plugin folder / add it to PATH)
+2. Obsidian Settings → Community plugins → enable **Serendipity Engine**
+3. In the plugin settings → **Engine core** → click **Check & download**: the plugin pulls the engine binary matching your platform (windows-amd64 / linux-amd64 / linux-arm64 / darwin-amd64 / darwin-arm64) from GitHub Releases into the plugin folder; alternatively drop the engine binary in manually (plugin folder / core-path setting / PATH)
 
 > The plugin auto-detects the local engine service (`http://127.0.0.1:<port>`). If it isn't running, the panel shows a status page that distinguishes "engine executable not found" (a config issue) from "engine not running" (just click Start).
 
@@ -56,6 +57,11 @@ Since v0.2.0 the MCP server is **embedded** in the engine `serve` process (endpo
 ```
 
 Read-only tools: `graph.stats / roam / random / relation / node / similar / community / touch_digest / state` (never writes touch, never triggers refresh — an AI session cannot mutate local state). The engine must be running and `/mcp` enabled.
+
+## Privacy & network use
+
+- All plugin–engine communication stays on `127.0.0.1`; vault data and note content never leave your machine.
+- **The only outbound request**: after you explicitly click "Check & download" in Settings → Engine core and confirm, the plugin fetches the engine binary for your platform from the engine's GitHub Releases (https://github.com/heptaspirit/serendipity-engine/releases ) and installs it into the plugin folder. Only release metadata and that binary are fetched — **no vault data, note content or usage signals are ever sent**. Without that click the plugin makes no network requests.
 
 ## Development
 

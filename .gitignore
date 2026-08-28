@@ -15,6 +15,7 @@ node_modules/
 docs-local/
 .gocache/
 .gomod-cache/
+.mnemon/
 
 # 工具缓存/输出（graphflow 等）
 .graphflow-cache/

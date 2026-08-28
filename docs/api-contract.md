@@ -24,6 +24,7 @@ token 来源：`seren serve --token <t>` 指定（插件即用之——插件生
 | `GET /api/relation?from=&to=` | 两节点关系（路径/PPR/证据） | ★ 当前节点操作栏「关系」Modal |
 | `GET /api/config` | 可调参数白名单 + 源信息 | ★ 参数 Modal |
 | `POST /api/refresh?limit=50` | 对账刷新（重解析+diff+改名迁移） | ★ 手动刷新 |
+| `POST /api/rebuild?limit=50` | 全量重建索引（丢弃增量、重解析整库；返回结构同 refresh） | ★ 设置页「重建索引」按钮 |
 | `POST /api/touch` | 反馈埋点（仅记录，不演化边权，red-line） | ★ 隐式 touch + 点卡片漫游 |
 | `GET /api/similar?id=&k=` | 结构相似（Adamic-Adar，独立入口不并入 roam） | ★ 相似 Modal |
 | `GET /api/node?id=` | 单节点详情（L0 摘要 + L1 邻居/backlinks） | ★ 当前节点操作栏「详情」Modal + 别名 |
@@ -43,7 +44,7 @@ token 来源：`seren serve --token <t>` 指定（插件即用之——插件生
 - `stats.digest_available`（v0.1.14）：**bool**，有新 digest 且未被 ack → true。插件据以显示「有新的 digest 可供查看」轻量状态提醒（被动、非弹窗）；ack 后转 false。
 - `roam` 结果 `uri`/`id`：`id` = 节点 id（Obsidian 下为文件名去 `.md`），`uri` = `obsidian://` / `orca-note://`（跳转）。
 - `touch`：`{"target":"<节点ID>","from":"<来源>"}` → `{"ok":true}`（失败也 `{"ok":false}`，不影响主流程）。
-- `refresh` 计数器：`added/updated/deleted/renamed/unchanged` + `duration_ms` + `nodes`。
+- `refresh` 计数器：`added/updated/deleted/renamed/unchanged` + `duration_ms` + `nodes`（`rebuild` 返回结构同 `refresh`）。
 - `touch/digest` 响应：`{"digest": {id, generated_at, window_start, since, total, targets[], sources[]} | null, "available": bool}`；`targets[]` = `{id, title, count}`（**标题已由引擎解析**，幽灵 touch 已过滤），`sources[]` = `{id, count}`。无 digest → `digest: null`。
 - `touch/digest/ack`：body `{"id":"<digest.id>"}` → `{"ok":true}`。
 - `mcp/status` 响应（v0.2.0）：`{enabled: bool, configured: bool, tools: int, transport: "streamable-http", endpoint: "/mcp"}`。`enabled` 是 serve **内存态**（`/mcp` 启停开关）；`configured`=是否已配库（未配库时 MCP 工具给引导，无数据）。旧引擎（无 `/api/mcp`）→ 端点 404，插件视作「不可监控」。

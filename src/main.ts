@@ -9,18 +9,21 @@
 //   - 版本契约：连接时用 /api/stats 的 version 与 REQUIRED_ENGINE（最低引擎要求）比对；
 //     插件自身版本号独立（见 manifest.version），与引擎版本解耦。
 //   - 生命周期（M2 §六）：INSTALLED → CONFIGURED → RUNNING ⇄ CORE_STOPPED → DISABLED。
+//   - 进程清理：spawn 传 --pid-file（引擎原子写自身 PID）；stopCore/pagehide 整树强杀
+//     （taskkill /T /F，不留孤儿）；启动前 clearStaleCore 校验并杀掉上次异常退出的残留。
 //   - 隐式 touch：active-leaf-change → POST /api/touch（仅记录不演化，引擎红线）。
 //
 // API 契约见 src/seren-api.d.ts + 引擎 docs/api-contract.md。
 // ============================================================================
 import { Plugin, Notice, setIcon } from "obsidian";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, spawnSync, ChildProcess } from "child_process";
 import { randomBytes } from "crypto";
-import { join, isAbsolute } from "path";
-import { existsSync, chmodSync } from "fs";
+import { join, isAbsolute, basename } from "path";
+import { existsSync, chmodSync, readFileSync, writeFileSync } from "fs";
 import { SerenApi, SerenError } from "./api";
 import { SerendipityView, SerenDigestModal, VIEW_TYPE_SEREN } from "./view";
 import { SerendipitySettingTab } from "./settings";
+import { resolveLatestDownload, downloadRelease } from "./engine-download";
 import type { SerenDigest, SerenMcpStatus } from "./seren-api";
 
 export type LifecycleStatus =
@@ -39,6 +42,7 @@ export interface SerendipitySettings {
   implicitTouch: boolean; // active-leaf-change → /api/touch
   digestReminder: boolean; // digest_available → 状态栏提醒（被动，非弹窗）
   vaultNameOverride: string; // 可选，默认 vault.getName()
+  engineVersion: string; // 插件下载的引擎 tag（如 "v0.2.1"）；手动放置的二进制不记录
 }
 
 const DEFAULT_SETTINGS: SerendipitySettings = {
@@ -50,6 +54,7 @@ const DEFAULT_SETTINGS: SerendipitySettings = {
   implicitTouch: true,
   digestReminder: true,
   vaultNameOverride: "",
+  engineVersion: "",
 };
 
 /** 引擎最低要求（v0.2.0 起 serve 内嵌 /mcp + /api/mcp/*）。
@@ -69,14 +74,34 @@ function isVersionAtLeast(v: string, min: string): boolean {
   return true;
 }
 
+/** 整树强杀进程：win 用 taskkill /T /F（硬杀，seren 的 store 是 bbolt、按操作开关，不损坏数据）；
+ * posix 用 SIGTERM。进程已退出时静默。 */
+function killTree(pid: number): void {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      windowsHide: true,
+    });
+  } else {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      /* 已退出 */
+    }
+  }
+}
+
 export default class SerendipityPlugin extends Plugin {
   settings!: SerendipitySettings;
   api!: SerenApi;
   status: LifecycleStatus = "INSTALLED";
 
   private proc: ChildProcess | null = null;
+  /** spawn 记录的引擎进程 PID（兜底句柄；权威句柄是引擎自己写的 pid-file）。 */
+  private pid: number | null = null;
   private statusBarText: HTMLElement | null = null;
   private touchTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 上一次 touch 的笔记 basename——作为下一次 touch 的 from（阅读来源/有向转移信号）。 */
+  private lastActiveId: string | null = null;
   private digestTimer: ReturnType<typeof setInterval> | null = null;
   private digestAvailable = false;
 
@@ -120,6 +145,10 @@ export default class SerendipityPlugin extends Plugin {
     this.renderStatusBar();
     this.startDigestPolling();
 
+    // 兜住应用退出：Electron 关窗可靠触发 pagehide（补 Obsidian 不调 onunload 的路径，
+    // 否则留孤儿占端口/连旧引擎）。经 registerDomEvent 注册，unload 时自动解绑。
+    this.registerDomEvent(window, "pagehide", () => this.stopCore());
+
     // 隐式 touch（仅记录不演化）——active-leaf-change
     if (this.settings.implicitTouch) {
       this.registerEvent(
@@ -162,6 +191,9 @@ export default class SerendipityPlugin extends Plugin {
       this.updateViews();
       return;
     }
+    // 启动自愈：杀上次异常退出残留的孤儿（读 pid-file，校验是 seren 才杀），
+    // 治「端口被占 / 一直连到旧引擎」。只在本进程无自管 proc 时执行，防误杀自己。
+    await this.clearStaleCore();
     if (!this.startCore()) {
       this.renderStatusBar();
       this.updateViews();
@@ -188,8 +220,10 @@ export default class SerendipityPlugin extends Plugin {
       this.vaultName(),
       "--token",
       this.settings.token,
+      // 引擎启动时原子写自身 PID 到 pid-file（优雅退出删）——插件清理句柄的权威来源
+      "--pid-file",
+      join(vaultPath, ".serendipity", "seren.pid"),
     ];
-    console.log("[seren] 准备启动引擎:", cmd, "→ serve ", vaultPath, "--port", this.settings.corePort, "--vault-name", this.vaultName());
     // mac/linux 下载的引擎二进制默认无 +x → spawn 报 EACCES；spawn 前补可执行位
     if (process.platform !== "win32" && existsSync(cmd) && isAbsolute(cmd)) {
       try {
@@ -202,6 +236,7 @@ export default class SerendipityPlugin extends Plugin {
       // stdio:'ignore'：丢弃引擎写 stdout 的启动信息（否则管道写满会卡住子进程，
       // 也规避受限环境禁 stdio 管道的限制）；引擎只走 HTTP，重定向输出无意义。
       this.proc = spawn(cmd, args, { windowsHide: true, stdio: "ignore" });
+      this.pid = this.proc.pid ?? null; // 兜底句柄；pid-file 是权威
     } catch (e) {
       console.error("[seren] spawn 失败", e);
       new Notice("Serendipity: 无法启动引擎（请检查核心路径）");
@@ -210,6 +245,7 @@ export default class SerendipityPlugin extends Plugin {
     this.proc.on("error", (e) => {
       console.error("[seren] 进程错误", e);
       this.proc = null;
+      this.pid = null;
       const info = this.coreSearchInfo();
       new Notice(
         info.found
@@ -221,6 +257,7 @@ export default class SerendipityPlugin extends Plugin {
     });
     this.proc.on("exit", () => {
       this.proc = null;
+      this.pid = null;
       this.status = "CORE_STOPPED";
       this.renderStatusBar();
       this.updateViews();
@@ -229,10 +266,14 @@ export default class SerendipityPlugin extends Plugin {
   }
 
   private stopCore(): void {
+    // 引擎自己写的 pid-file 是权威句柄，优先；兜底用 spawn 记录的 this.pid
+    const pid = this.readPidFile() ?? this.pid;
+    if (pid) killTree(pid);
     if (this.proc) {
       this.proc.kill();
       this.proc = null;
     }
+    this.pid = null;
     this.status = "DISABLED";
     this.renderStatusBar();
     this.updateViews();
@@ -241,6 +282,54 @@ export default class SerendipityPlugin extends Plugin {
   /** 公开：手动停止引擎（设置页/命令用）。 */
   stopEngine(): void {
     this.stopCore();
+  }
+
+  // ---- 进程句柄（pid-file 自愈）----
+
+  /** 读引擎写的 pid-file（<vault>/.serendipity/seren.pid）。不存在/空/非法 → null。 */
+  private readPidFile(): number | null {
+    const pidFile = join(this.vaultPath(), ".serendipity", "seren.pid");
+    try {
+      const n = parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    } catch {
+      return null; // 文件不存在 / 读取失败
+    }
+  }
+
+  /** 校验 PID 确实是 seren 进程（win 比对镜像名，posix 看 comm 含 seren）——绝不误杀无关程序。 */
+  private isSerenProcess(pid: number): boolean {
+    try {
+      if (process.platform === "win32") {
+        const expected = basename(this.resolveCoreCmd() ?? "seren.exe").toLowerCase();
+        const res = spawnSync(
+          "tasklist",
+          ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"],
+          { encoding: "utf8", windowsHide: true },
+        );
+        const line = String(res.stdout ?? "")
+          .split(/\r?\n/)
+          .find((l) => l.includes(`"${pid}"`));
+        if (!line) return false; // 无该 PID 的行（进程已退出 / 不是任务列表项）
+        const img = line.split(",")[0].replace(/"/g, "").trim().toLowerCase();
+        return img === expected;
+      }
+      const res = spawnSync("ps", ["-p", String(pid), "-o", "comm="], {
+        encoding: "utf8",
+      });
+      return String(res.stdout ?? "").toLowerCase().includes("seren");
+    } catch {
+      return false; // 查询失败 → 宁可不动手
+    }
+  }
+
+  /** 启动自愈：杀掉上次异常退出残留的孤儿（仅当进程在且是 seren）。本进程有自管 proc 时跳过。 */
+  private async clearStaleCore(): Promise<void> {
+    if (this.proc) return; // 自己管的进程在 → 不清理，防误杀自己
+    const pid = this.readPidFile();
+    if (!pid) return;
+    if (this.isSerenProcess(pid)) killTree(pid);
+    await new Promise((r) => setTimeout(r, 500)); // 等端口释放，避免新 spawn 撞 EADDRINUSE
   }
 
   private async waitHealthy(timeoutMs: number): Promise<boolean> {
@@ -282,7 +371,6 @@ export default class SerendipityPlugin extends Plugin {
     const targets = file && file !== id ? [file, id] : [id];
     for (const target of targets) {
       try {
-        console.log("[seren] 打开:", target);
         await this.app.workspace.openLinkText(target, "");
         return;
       } catch (e) {
@@ -360,8 +448,10 @@ export default class SerendipityPlugin extends Plugin {
       this.touchTimer = null;
       const f = this.app.workspace.getActiveFile();
       if (!f) return;
-      const id = f.basename;
-      void this.api.touch(id, "").catch(() => {});
+      const target = f.basename;
+      const from = this.lastActiveId ?? ""; // 上一篇被 touch 的笔记 = 来源（A→B→C 形成链）
+      void this.api.touch(target, from).catch(() => {});
+      this.lastActiveId = target; // 记住当前，作下一次的 from
     }, 500);
   }
 
@@ -406,6 +496,22 @@ export default class SerendipityPlugin extends Plugin {
     }
     // 兜底走 PATH；Windows 需带 .exe 才能被 CreateProcess 解析
     return process.platform === "win32" ? "seren.exe" : "seren";
+  }
+
+  /** 下载最新引擎二进制到插件目录（GitHub Releases，用户按钮触发）。
+   * Windows 下覆盖运行中的 exe 会被锁 → 先停引擎再写。返回安装的 tag（如 "v0.2.1"）。 */
+  async downloadEngineCore(): Promise<string> {
+    const info = await resolveLatestDownload();
+    const dir = this.pluginDir();
+    if (!dir) throw new Error("无法定位插件目录（manifest.dir 缺失）");
+    if (this.proc) this.stopCore(); // 解锁运行中的 exe（Windows 占用会 EPERM）
+    const dest = join(dir, info.name.endsWith(".exe") ? "seren.exe" : "seren");
+    const data = await downloadRelease(info);
+    writeFileSync(dest, Buffer.from(data));
+    if (process.platform !== "win32") chmodSync(dest, 0o755); // 下载的文件默认无 +x
+    this.settings.engineVersion = info.tag;
+    await this.saveSettings();
+    return info.tag;
   }
 
   /** 返回核心查找结果（供「未检测到引擎」占位页显示）。

@@ -122,6 +122,11 @@ export class SerenApi {
     return this.post<SerenRefresh>(`/api/refresh?limit=${limit}`, {});
   }
 
+  /** 全量重建索引（丢弃增量、重解析整库；返回结构同 refresh）。 */
+  rebuild(limit = 50): Promise<SerenRefresh> {
+    return this.post<SerenRefresh>(`/api/rebuild?limit=${limit}`, {});
+  }
+
   /** 反馈埋点：仅记录不演化（引擎红线）。失败不抛，调用方按需处理。 */
   touch(target: string, from?: string): Promise<SerenTouch> {
     return this.post<SerenTouch>("/api/touch", { target, from: from ?? "" });

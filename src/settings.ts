@@ -8,6 +8,7 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import { randomBytes } from "crypto";
 import type SerendipityPlugin from "./main";
+import { resolveLatestDownload, assetNameForPlatform } from "./engine-download";
 
 export class SerendipitySettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: SerendipityPlugin) {
@@ -18,7 +19,7 @@ export class SerendipitySettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h1", { text: "Serendipity Engine" });
+    // 无顶级标题（插件名不设为标题，遵循 Plugin guidelines：不要插件名顶级 heading）
     containerEl.createEl("p", {
       text: "图谱漫游薄壳插件：把引擎（seren）自服务的 Web UI 嵌进 Obsidian。设置「引擎核心」与「连接」参数。",
       cls: "setting-item-description",
@@ -31,7 +32,7 @@ export class SerendipitySettingTab extends PluginSettingTab {
     });
 
     // ---- 连接 ----
-    containerEl.createEl("h3", { text: "连接" });
+    new Setting(containerEl).setName("连接").setHeading();
 
     new Setting(containerEl)
       .setName("引擎模式")
@@ -100,8 +101,58 @@ export class SerendipitySettingTab extends PluginSettingTab {
         }),
       );
 
+    // ---- 引擎核心 ----
+    new Setting(containerEl).setName("引擎核心").setHeading();
+
+    const plat = assetNameForPlatform();
+    new Setting(containerEl)
+      .setName("下载 / 更新引擎核心")
+      .setDesc(
+        `从 GitHub Releases 下载当前平台的引擎二进制到插件目录。当前平台：${
+          plat ? `${plat.os}/${plat.arch}` : "无对应构建"
+        }；已下载版本：${this.plugin.settings.engineVersion || "未记录（可手动放置 seren）"}。`,
+      )
+      .addButton((b) => {
+        b.setButtonText("检查并下载");
+        b.onClick(async () => {
+          b.setDisabled(true);
+          try {
+            const info = await resolveLatestDownload();
+            const cur = this.plugin.settings.engineVersion;
+            if (cur === info.tag) {
+              new Notice(`Serendipity: 引擎已是最新 ${info.tag}`);
+              return;
+            }
+            const size = (info.size / 1048576).toFixed(1);
+            if (
+              !confirm(
+                `发现引擎 ${info.tag}${cur ? `（当前 ${cur}）` : ""}，约 ${size} MB。下载并安装到插件目录？（运行中的引擎会被先停止）`,
+              )
+            ) {
+              return;
+            }
+            const tag = await this.plugin.downloadEngineCore();
+            new Notice(`Serendipity: 引擎 ${tag} 已安装，点「启动引擎」即可使用。`);
+            this.display();
+          } catch (e) {
+            new Notice(`Serendipity: 下载失败（${(e as Error).message}）`);
+          } finally {
+            b.setDisabled(false);
+          }
+        });
+      });
+
+    containerEl.createEl("p", {
+      text: `手动下载：打开 https://github.com/heptaspirit/serendipity-engine/releases ，下载本机对应资产（${
+        plat ? `seren-<版本>-${plat.os}-${plat.arch}${plat.os === "windows" ? ".exe" : ""}` : "当前平台无对应构建"
+      }），重命名为 ${
+        process.platform === "win32" ? "seren.exe" : "seren"
+      } 放到插件目录 <vault>/.obsidian/plugins/serendipity-engine/ 即可（也可放 PATH 或用「核心路径」指定）。`,
+      cls: "setting-item-description",
+    });
+
     // ---- 行为 ----
-    containerEl.createEl("h3", { text: "行为" });
+    new Setting(containerEl).setName("行为").setHeading();
 
     new Setting(containerEl)
       .setName("自动启动引擎")
@@ -159,7 +210,7 @@ export class SerendipitySettingTab extends PluginSettingTab {
       );
 
     // ---- 操作 ----
-    containerEl.createEl("h3", { text: "操作" });
+    new Setting(containerEl).setName("操作").setHeading();
 
     new Setting(containerEl)
       .setName("启动 / 停止引擎")
@@ -177,8 +228,25 @@ export class SerendipitySettingTab extends PluginSettingTab {
         }),
       );
 
+    new Setting(containerEl)
+      .setName("重建索引（全量重解析）")
+      .setDesc("丢弃增量、全量重新解析整库（改画像排除后强制重建）。")
+      .addButton((b) =>
+        b.setButtonText("重建").onClick(async () => {
+          if (!confirm("确认全量重建？耗时可能较长。")) return;
+          try {
+            const res = await this.plugin.api.rebuild();
+            new Notice(
+              `Serendipity: 重建完成（added ${res.added} · updated ${res.updated} · deleted ${res.deleted} · 共 ${res.nodes} 节点）`,
+            );
+          } catch {
+            new Notice("Serendipity: 重建失败（引擎未运行？）");
+          }
+        }),
+      );
+
     // ---- MCP（AI 接入，v0.2.0 重写：serve 内嵌 /mcp + 状态启停）----
-    containerEl.createEl("h3", { text: "MCP（AI 接入）" });
+    new Setting(containerEl).setName("MCP（AI 接入）").setHeading();
     const mcpStatusEl = containerEl.createEl("p", {
       text: "MCP 状态: 加载中…",
       cls: "seren-settings-status-text",

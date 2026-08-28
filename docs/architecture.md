@@ -47,19 +47,21 @@ onload
 ### 3.2 spawn 契约
 
 ```powershell
-seren serve <vaultPath> --port <port> --vault-name <vaultName> --token <pluginToken>
+seren serve <vaultPath> --port <port> --vault-name <vaultName> --token <pluginToken> --pid-file <vaultPath>\.serendipity\seren.pid
 ```
 
 - `vaultPath` = Obsidian vault 根目录（`vault.adapter.getBasePath()`）
 - `vaultName` = `vault.getName()`（可被设置覆盖），用于生成 `obsidian://` 跳转
 - `token` = 插件生成并持久化的 32-hex；`--token` 传给引擎，插件自身用同一 token 调 `/api/*` 无感
 - 端口默认 8910（`--port` 显式指定，spawn 与连接一致）
+- `--pid-file`（v0.2.1）：引擎启动时原子写自身 PID 到 `<vault>/.serendipity/seren.pid`、优雅退出时删除——插件清理进程的**权威句柄**（stopCore 整树强杀优先读它，启动前自愈校验它）
 
 ### 3.3 引擎二进制探测（跨平台）
 
 - 候选路径（按优先级）：①设置「核心路径」→ ②插件目录(`manifest.dir` 解析成绝对) → ③从 vault 推导 `.obsidian/plugins/<id>`
 - 每处**同时探测 `seren.exe` 和 `seren`**（Windows 优先 `.exe`，mac/linux 无后缀）——`manifest.dir` 可能是 vault 相对路径，需 `isAbsolute` 判断后 resolve
 - PATH 兜底：Windows 用 `seren.exe`（CreateProcess 需带扩展名），unix 用 `seren`
+- **一键下载**（v0.2.1）：设置页「检查并下载」从引擎 GitHub Releases 拉当前平台二进制到**插件目录**（候选路径 ②，无需任何配置即可被探测）；详见 §6 扩展点
 - **unix 补可执行位**：spawn 前（非 win32 且找到文件路径）`chmod 0o755`，因为下载的二进制默认无 `+x` → 否则 `spawn` 报 `EACCES`
 - `vaultPath`/`--vault-name`/`--token`/`--port` 全平台通用；引擎 Go 交叉编译出 win/mac/linux 三平台二进制
 
@@ -85,7 +87,9 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 - 实现为轻量 `status: LifecycleStatus` 字段 + 状态栏 + 设置页文本，**未做完整 FSM 类**（ponytail：初版够用）
 - **启动非阻塞（重要）**：`onload` **绝不 `await` 引擎发现/启停**——引擎起不来时 `waitHealthy` 会阻塞，Obsidian 启动会 await 每个插件 `onload`。用 `onLayoutReady` 后台跑，结束再 `updateViews`。
 - **启用与内核解耦**：`autoStart` **默认 `false`**——插件启用不依赖内核、不自动 spawn（自动拉起会引擎同步解析整库、拖慢 Obsidian）。内核未起时面板显示状态页，用户显式点「启动引擎」或命令才拉起。
-- **进程红线**：`onunload` 必须 `proc.kill()`（Obsidian 官方明确「External connections（子进程）须在 unload 清理」）
+- **进程红线**：`onunload` 必须 `proc.kill()`（Obsidian 官方明确「External connections（子进程）须在 unload 清理」）；另挂 `pagehide`（Electron 关窗可靠触发）兜住 Obsidian 不调 onunload 的退出路径
+- **整树强杀**：`stopCore` 读 pid-file（权威）→ 兜底 `this.pid` → `killTree`（win `taskkill /PID <pid> /T /F`，posix SIGTERM）；硬杀不损坏 bbolt store
+- **启动自愈**：`ensureCore` 在 spawn 前 `clearStaleCore()`——读 pid-file 且 `isSerenProcess`（win 比对 tasklist 镜像名 / posix ps comm 含 seren）确认后才杀，治「上次异常退出残留孤儿占端口 / 连到旧引擎」，绝不误杀无关程序；本进程有自管 proc 时跳过
 - `proc.on('exit')` → `proc=null`，状态回 `CORE_STOPPED`，刷新面板；`proc.on('error')`（ENOENT/EACCES/端口占用）→ 提示具体原因 + `updateViews` 显示占位
 - spawn 用 **`stdio:'ignore'`**（丢弃引擎 stdout 启动信息，防管道写满卡子进程）
 - `waitHealthy` 首查 `proc===null` 立即返回失败（进程已退出不再空等）
@@ -107,7 +111,7 @@ RUNNING ──(停用内核)──▶ DISABLED ──(重新启用)──▶ RUN
 | **touch digest 消费（v0.1.14，引擎 §3.7）** | **已实现（见 [`api-contract.md`](api-contract.md) §5）**：`api.ts` 加 `touchDigest`/`touchDigestAck`；状态栏**被动提醒**（`digest_available` 轮询 30s，非弹窗）→ digest Modal（读 `/api/touch/digest`）→「导出为笔记」写 `serendipity-digest-<时间戳>.md` 入 vault（**引擎零写 vault，导出是插件职责**）+ ack。设置页「digest 提醒」开关 |
 | **MCP 配置（AI 接入，v0.2.0 重写为 Streamable HTTP）** | **已实现（见 [`api-contract.md`](api-contract.md) §6）**：`main.ts mcpConfigJson()` 生成 `mcpServers.seren`（`type:streamable-http` + `url:http://127.0.0.1:<port>/mcp` + `headers.X-Seren-Token`）；MCP 由 serve **内嵌**（`/mcp`，Web+REST+MCP 三合一），插件新增 `mcpStatus()`/`setMcpEnabled()` 监控与启停 `/mcp`；主界面状态条 + 设置页显示「已启用/已停用/未配库/旧引擎」并一键复制；设置页可启停 |
 | **当前节点操作栏（v0.2.0 前端回填）** | **已实现**：漫游锚定后对主锚点提供 详情/相似/关系 三键（`/api/node`、`/api/similar`、`/api/relation` 新 Modal），主锚点标题别名优先（`/api/node aliases`），参照引擎 Web UI #current-node |
-| 下载核心按钮（v1.x） | 设置页 + 引擎 GitHub release 取 asset 落盘（`fs`），启动仍靠用户 |
+| **下载核心按钮（v0.2.1）** | **已实现**：`src/engine-download.ts`（平台→资产名映射 + 查 GitHub latest release + 下载），设置页「引擎核心→检查并下载」二次确认后落盘到插件目录（win 存 `seren.exe`、unix 存 `seren` 并补 +x），下载 tag 记入 `settings.engineVersion`；运行中的引擎先停再覆盖（win 文件锁）；下载后仍在候选路径 ② 被 `resolveCoreCmd` 自动探测到，启动仍靠用户 |
 | 显式刷新联动 | `vault.on('modify')` 节流 → `api.refresh()`（引擎已有自动 watch，可仅作补充） |
 | AI 协作（Flow 1 建议链接研判） | 插件侧 AI 模块 + 引擎 `/api/suggest-links`/`POST /api/edges`（见引擎 plugin-ai-cooperation） |
 | 虎鲸 Orca | 独立仓库 `serendipity-orca`（M2-2），复用契约，external 模式 |
