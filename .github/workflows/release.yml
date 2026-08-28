@@ -1,18 +1,19 @@
 # ============================================================================
-# release.yml · Serendipity Obsidian 插件自动发布（打 v* tag 触发）
+# release.yml · Serendipity Obsidian 插件自动发布（打 tag 触发）
 #
 #   - build : npm ci + rollup 构建 → 单文件 main.js
 #   - release: 把 main.js / manifest.json / styles.css 挂到 tag 的 GitHub Release
 #
-# 打 tag 要求：tag 必须与 manifest.json 的 version 完全一致（如 v0.2.1 ↔ 0.2.1），
-# Obsidian 社区目录按 manifest version 找对应 release 下载这三个文件。
+# 打 tag 要求：tag 必须与 manifest.json 的 version 完全一致（如 0.2.1 ↔ "0.2.1"，
+# 不带 v 前缀——Obsidian 社区目录按 manifest version 精确匹配 release tag，
+# 见 docs.obsidian.md/Plugins/Releasing/Submit+your+plugin）。
 # ============================================================================
 name: Release plugin
 
 on:
   push:
     tags:
-      - "v*"
+      - "*"
 
 permissions:
   contents: write
